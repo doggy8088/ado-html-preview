@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Azure DevOps HTML Preview",
+    "description": "Extension name shown in Chrome and the Web Store."
+  },
+  "appDesc": {
+    "message": "Preview HTML files in Azure DevOps Repos with JavaScript enabled, inline or full-screen, inside an isolated sandbox.",
+    "description": "Short description (max 132 characters)."
+  }
+}

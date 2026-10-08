@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Azure DevOps HTML Preview",
+    "description": "Chrome 與 Web Store 顯示的擴充功能名稱。"
+  },
+  "appDesc": {
+    "message": "在 Azure DevOps Repos 以啟用 JavaScript 的方式完整預覽 HTML 檔，內嵌或全螢幕，全程在隔離的 sandbox 中執行。",
+    "description": "簡短描述（最多 132 字元）。"
+  }
+}

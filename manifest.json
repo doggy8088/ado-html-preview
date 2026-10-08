@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "default_locale": "en",
+  "name": "__MSG_appName__",
+  "version": "0.1.0",
+  "description": "__MSG_appDesc__",
+  "homepage_url": "https://github.com/doggy8088/ado-html-preview",
+  "minimum_chrome_version": "112",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://dev.azure.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "sandbox": {
+    "pages": [
+      "sandbox.html"
+    ]
+  },
+  "content_security_policy": {
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: blob: data:; child-src 'self' https: http: blob: data:;"
+  }
+}

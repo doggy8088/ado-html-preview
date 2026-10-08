@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>sandbox</title>
+  <script>
+    // 此頁在 manifest 的 sandbox 清單中：origin 為 null、CSP 允許 inline script。
+    // 先通知外層 ready，收到 HTML 後直接整頁重寫，讓網頁腳本在隔離環境中執行。
+    window.addEventListener('message', (ev) => {
+      if (ev.source !== window.parent || ev.data?.type !== 'render') return;
+      document.open();
+      document.write(ev.data.html);
+      document.close();
+      const report = () => window.parent.postMessage({ type: 'title', title: document.title }, '*');
+      report();
+      window.addEventListener('load', report);
+    }, { once: true });
+    window.parent.postMessage({ type: 'ready' }, '*');
+  </script>
+</head>
+<body></body>
+</html>
