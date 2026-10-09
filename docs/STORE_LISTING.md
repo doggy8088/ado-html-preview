@@ -17,11 +17,11 @@
 
 **zh-TW**
 
-在 Azure DevOps Repos 以啟用 JavaScript 的方式完整預覽 HTML 檔，內嵌或全螢幕，全程在隔離的 sandbox 中執行。
+在 Azure DevOps Repos 以啟用 JavaScript 的方式預覽 HTML，並以更美觀、支援深淺色的排版預覽 Markdown，內嵌或全螢幕皆可。
 
 **en**
 
-Preview HTML files in Azure DevOps Repos with JavaScript enabled, inline or full-screen, inside an isolated sandbox.
+Preview HTML with JavaScript enabled, and Markdown with a cleaner themeable layout, in Azure DevOps Repos: inline or full-screen.
 
 ## 詳細說明（Description）
 
@@ -42,6 +42,9 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 • 透過 Azure DevOps Git REST API 讀取你正在看的那個檔案（使用你現有的登入狀態，不需要 PAT）
 • 在沒有 allow-same-origin 的 sandbox 中渲染，網頁腳本碰不到 Azure DevOps 的 cookie 與 session
 • 修正預覽內的連結：#錨點正常跳轉、相對路徑在新分頁開啟 repo 內對應檔案、外部網址開新分頁
+
+▶ Markdown 預覽 (內嵌) / Markdown 預覽 (全螢幕)
+開啟 .md 檔時按鈕會變成 Markdown 預覽：針對中英混排調整的字型、行高與間距，深淺色主題（跟隨 Azure DevOps、可隨時切換），側邊目錄，表頭固定的長表格，程式碼語法上色與一鍵複製，mermaid 圖表，GitHub 風格的 [!NOTE] / [!WARNING] 提示區塊，repo 內的相對路徑圖片。
 
 適合把專案文件、設計稿、靜態原型（含 JavaScript）直接放在 repo 裡，讓團隊在 Azure DevOps 內就能完整瀏覽。
 
@@ -65,6 +68,9 @@ Both modes:
 • fetch the single file you are viewing through the Azure DevOps Git REST API, using your existing session (no PAT needed)
 • render it in a sandbox without allow-same-origin, so page scripts cannot touch Azure DevOps cookies or sessions
 • fix links inside the preview: #anchors work, relative paths open the matching repo file in a new tab, external URLs open in a new tab
+
+▶ Markdown preview (inline / full screen)
+On .md files the buttons switch to a Markdown preview: typography tuned for mixed CJK and Latin text, light and dark themes (following Azure DevOps, switchable at any time), a side table of contents, long tables with sticky headers, syntax-highlighted code with one-click copy, mermaid diagrams, GitHub-style [!NOTE] / [!WARNING] alerts, and images referenced by relative path inside the repo.
 
 Ideal for keeping project docs, design mock-ups and static prototypes (with JavaScript) in the repo and browsing them fully inside Azure DevOps.
 
@@ -100,7 +106,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 **單一用途（Single purpose）**
 
 ```
-在 Azure DevOps Repos 的檔案頁面，以啟用 JavaScript 的方式於隔離 sandbox 中預覽使用者正在檢視的 HTML 檔案。
+在 Azure DevOps Repos 的檔案頁面，於隔離 sandbox 中預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式呈現，Markdown 以更易讀的排版呈現。
 ```
 
 **權限理由（Permission justification）**
@@ -108,7 +114,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 | 權限 | 理由 |
 | --- | --- |
 | `storage` | 只使用 chrome.storage.session（記憶體、關閉瀏覽器即清除），在「全螢幕」模式把抓到的 HTML 交給預覽視窗，視窗讀取後立即刪除。不使用 local / sync storage。 |
-| 主機權限 `https://dev.azure.com/*` | 需要在 Azure DevOps 檔案頁注入按鈕，並以使用者現有的登入狀態向同一組織的 Git Items REST API 讀取使用者正在檢視的那一個檔案。 |
+| 主機權限 `https://dev.azure.com/*` | 需要在 Azure DevOps 檔案頁注入按鈕，並以使用者現有的登入狀態向同一組織的 Git Items REST API 讀取使用者正在檢視的那一個檔案（及其相對路徑引用的同 repo 資源）。 |
 
 **遠端程式碼（Remote code）**：選「是」，並填寫：
 
@@ -131,6 +137,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 2. 頁籤列右側會出現「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」兩顆按鈕。
 3. 點「完整預覽 (內嵌)」：預覽區塊會改為啟用 JavaScript 的完整網頁。
 4. 點「完整預覽 (全螢幕)」：開啟獨立視窗顯示完整網頁。
+5. 開啟任何 .md 檔案，按鈕變成「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，以擴充功能自己的排版主題顯示 Markdown（可在預覽右上角切換深淺色）。
 若審核人員沒有 Azure DevOps 帳號，免費方案可於 https://azure.microsoft.com/services/devops/ 建立，建立 repo 後上傳任一含 <script> 的 HTML 即可測試。
 ```
 

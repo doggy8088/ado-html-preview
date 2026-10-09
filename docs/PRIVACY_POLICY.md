@@ -1,8 +1,8 @@
 # Privacy Policy — Azure DevOps HTML Preview
 
-_Last updated: 2026-10-08_
+_Last updated: 2026-10-09_
 
-**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, inside an isolated sandbox.
+**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, and Markdown files with an alternative layout, inside an isolated sandbox.
 
 ## Data collection
 
@@ -13,13 +13,13 @@ The extension does **not** collect, store, transmit, sell, or share any personal
 | Access | Why | Where the data goes |
 | --- | --- | --- |
 | Pages under `https://dev.azure.com/*` | To add the two preview buttons to the file tab bar and to replace the built-in preview area when you click "完整預覽 (內嵌)". | Nowhere. The page is only modified locally in your browser. |
-| The HTML file you are currently viewing | When you click a preview button, the extension requests that single file from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a sandboxed frame. For the full-screen mode it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it. |
+| The HTML or Markdown file you are currently viewing, plus same-repository files it references by relative path (scripts, stylesheets, images) | When you click a preview button, the extension requests those files from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a sandboxed frame. For the full-screen mode it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it. |
 
 The extension never requests any other repository content, never contacts any domain other than the Azure DevOps origin you are already using, and never writes anything to disk or to synced storage.
 
 ## Sandboxing
 
-HTML files are rendered in frames that use the `sandbox` attribute **without** `allow-same-origin`. Scripts inside the previewed file run with a null origin and cannot read Azure DevOps cookies, local storage, or call Azure DevOps APIs with your credentials.
+HTML files, and the HTML generated from Markdown files, are rendered in frames that use the `sandbox` attribute **without** `allow-same-origin`. Scripts inside the previewed file run with a null origin and cannot read Azure DevOps cookies, local storage, or call Azure DevOps APIs with your credentials.
 
 ## Permissions
 
@@ -28,7 +28,7 @@ HTML files are rendered in frames that use the `sandbox` attribute **without** `
 
 ## Third parties
 
-No data is shared with third parties. The extension does not load any remote scripts or resources of its own.
+No data is shared with third parties. The extension does not load any remote scripts or resources of its own; the open-source libraries it uses for Markdown rendering (marked, DOMPurify, highlight.js, mermaid) are bundled inside the extension package.
 
 ## Changes
 

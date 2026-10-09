@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_appName__",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "__MSG_appDesc__",
   "homepage_url": "https://github.com/doggy8088/ado-html-preview",
   "minimum_chrome_version": "112",
@@ -24,9 +24,25 @@
         "https://dev.azure.com/*"
       ],
       "js": [
+        "vendor/marked.min.js",
+        "vendor/purify.min.js",
+        "vendor/highlight.min.js",
+        "md-core.js",
+        "md-theme.js",
+        "md-shell.js",
         "content.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vendor/mermaid.min.js"
+      ],
+      "matches": [
+        "https://dev.azure.com/*"
+      ]
     }
   ],
   "sandbox": {
