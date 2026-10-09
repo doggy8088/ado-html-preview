@@ -235,13 +235,13 @@ document.addEventListener('click',function(e){
     return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, snippet + '</body>') : html + snippet;
   }
 
-  // 確保目前在 Preview 頁籤，並回傳要被取代的 ADO 預覽區塊：
+  // 確保目前在 Preview 頁籤，並回傳 ADO 自己的預覽區塊：
   //   HTML → ADO 的 srcdoc iframe；Markdown → ADO 自己渲染的 .markdown-preview-container。
-  // 我們自己建立的 iframe 也算（再按一次按鈕時會被重新取代）。
+  // 不含我們自己建立的 iframe（呼叫前會先 clearInlinePreview）。
   async function ensurePreviewTarget(kind) {
     const selector = kind === 'md'
-      ? `iframe[${FRAME_ATTR}], .markdown-preview-container, .files-hub-content-preview`
-      : `iframe[${FRAME_ATTR}], iframe[srcdoc]`;
+      ? '.markdown-preview-container, .files-hub-content-preview'
+      : `iframe[srcdoc]:not([${FRAME_ATTR}])`;
     const find = () => document.querySelector(selector);
     let frame = find();
     if (frame) return frame;
@@ -298,13 +298,36 @@ document.addEventListener('click',function(e){
   }
 
   // ---------- 1. 內嵌 ----------
+  // ADO 的預覽區塊是 React 管理的節點，不能用 replaceWith 拿掉：切換檔案時 React 要更新那個
+  // 已不在 DOM 裡的節點，整個區塊會變成「An unexpected error has occurred within this region of the page」。
+  // 做法：把原節點隱藏、把我們的 iframe 插在它後面；換檔案或 ADO 重建預覽區塊時再把 iframe 移除、恢復原節點。
+  let active = null; // { key, frame, old, oldDisplay }
+
+  const previewKey = (info) => `${info.path}|${new URLSearchParams(location.search).get('version') || ''}`;
+
+  function clearInlinePreview() {
+    if (!active) return;
+    active.frame.remove();
+    if (active.old.isConnected) active.old.style.display = active.oldDisplay;
+    active = null;
+  }
+
+  // 由 MutationObserver 持續呼叫：網址換了檔案 / 分支，或 ADO 把原節點或我們的 iframe 拿掉，就清掉內嵌預覽
+  function reconcileInlinePreview() {
+    if (!active) return;
+    const info = parseLocation();
+    if (!info || previewKey(info) !== active.key || !active.old.isConnected || !active.frame.isConnected) clearInlinePreview();
+  }
+
   async function renderInline() {
     const info = parseLocation();
     if (!info) return;
+    clearInlinePreview();
     // srcdoc 會繼承 dev.azure.com 的 CSP（script-src 'nonce-…' 'strict-dynamic'），
     // 所以每個 <script> 都要帶上同一個 nonce 才會被允許執行。
     const nonce = getNonce();
     const [html, old] = await Promise.all([buildDocument(info, nonce), ensurePreviewTarget(info.kind)]);
+    clearInlinePreview(); // 等待期間若使用者又按了一次，先清掉
 
     // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上
     let doc = info.kind === 'md' || !nonce ? html : html.replace(/<script\b/gi, `<script nonce="${nonce}"`);
@@ -318,7 +341,10 @@ document.addEventListener('click',function(e){
     // 刻意不加 allow-same-origin：頁面腳本無法存取 Azure DevOps 的 cookie / session
     f.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals');
     f.srcdoc = doc;
-    old.replaceWith(f);
+    const oldDisplay = old.style.display;
+    old.insertAdjacentElement('afterend', f);
+    old.style.display = 'none';
+    active = { key: previewKey(info), frame: f, old, oldDisplay };
     fitFrame();
   }
 
@@ -372,6 +398,7 @@ document.addEventListener('click',function(e){
   }
 
   function ensureButtons() {
+    reconcileInlinePreview();
     const info = parseLocation();
     const tabbar = document.querySelector('.bolt-tabbar');
     const existing = document.getElementById(WRAP_ID);

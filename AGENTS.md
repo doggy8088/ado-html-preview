@@ -46,6 +46,9 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
 - 安全設計：內嵌 iframe 與 sandbox 頁都**不得**加 `allow-same-origin`，網頁腳本不能接觸 Azure DevOps 的 cookie / session。
 - 內嵌 iframe 的 srcdoc 會繼承 dev.azure.com 的 CSP，所以每個 `<script>` 都要補上頁面的 nonce。
 - 內嵌 iframe 高度是「填滿頁籤列以下的視窗」，不要改成依內容高度撐開：使用 vh 單位的網頁會形成無限增長迴圈。
+- 內嵌模式**不能**用 `replaceWith` 拿掉 ADO 的預覽節點（React 管理）：切換檔案時 React 更新不到節點，整個區塊會報
+  「An unexpected error has occurred within this region of the page」。只能隱藏原節點、把 iframe 插在旁邊，
+  並由 `reconcileInlinePreview()` 在換檔案 / ADO 重建節點時移除 iframe、恢復原節點。
 - macOS 上 `chrome.windows.create` 的 `type:'popup'` 搭配 `state:'maximized'` 會產生 1×33px 的視窗，務必用明確的 left/top/width/height。
 - 網址有兩種：`/{org}/{project}/_git/{repo}` 與省略專案段的 `/{org}/_git/{repo}`（專案名 = repo 名），`parseLocation()` 兩種都要支援，後者以 repo 名當專案名呼叫 API。
 - 預覽前會把 HTML 內相對路徑的 `<script src>`、`<link rel=stylesheet>`、`<img src>` 透過 Git Items API 抓回來內嵌（`inlineRelativeAssets`）；執行期 fetch 的資源與 CSS 內的 `url()` 不處理。抓資源必須用 `$format=octetStream`，`text` 會把二進位檔轉碼損毀。
