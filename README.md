@@ -19,7 +19,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 安裝
 
-- Chrome Web Store：（上架後補連結）
+- Chrome Web Store：<https://chromewebstore.google.com/detail/nmkijdbigeagfllhafiajnjpldbdlbfl>
 - 從原始碼：`git clone` 後到 `chrome://extensions` 開啟「開發人員模式」→「載入未封裝項目」→ 選擇此資料夾。
 
 ## 使用方式

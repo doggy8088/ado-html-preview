@@ -2,8 +2,8 @@
 
 分三個階段：**A. 一次性準備**（開發者帳號、首次手動上架）→ **B. 設定 API 與 GitHub Secrets** → **C. 之後每次發布全自動**。
 
-> **目前狀態：Chrome Web Store 自動上傳已關閉。** 第一版還在審查／尚未正式上架前，推到 `main` 只會建立 GitHub Release。
-> 首版上架後，到 **Settings → Secrets and variables → Actions → Variables** 新增 Repository variable `CWS_AUTO_PUBLISH` = `true` 即可開啟（見 B5）。
+> **目前狀態：首版 v0.1.0 已上架（<https://chromewebstore.google.com/detail/nmkijdbigeagfllhafiajnjpldbdlbfl>），Repository variable `CWS_AUTO_PUBLISH` = `true`，推到 `main` 的新版本會在建立 GitHub Release 後自動上傳並送審。**
+> 需要暫停自動上架時，把 `CWS_AUTO_PUBLISH` 改成 `false` 即可（見 B3-1）。
 
 ---
 
