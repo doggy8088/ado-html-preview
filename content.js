@@ -21,10 +21,19 @@
     const qs = new URLSearchParams(location.search);
     const path = qs.get('path');
     if (!path || !/\.html?$/i.test(path)) return null;
-    const version = qs.get('version') || '';
+    const version = qs.get('version') || currentBranchVersion();
     const repo = decodeURIComponent(m[3]);
     const project = m[2] ? decodeURIComponent(m[2]) : repo;
     return { org: m[1], project, repo, path, version };
+  }
+
+  // 網址沒有 version= 時，Azure DevOps 顯示的是使用者上次瀏覽的分支（不一定是 repo 預設分支），
+  // 但 API 不帶版本會用預設分支 → 檔案只存在於其他分支時回 404。改讀版本選擇器上顯示的分支。
+  // 選 tag / commit 時 ADO 一定會把 GT / GC 寫進網址，所以這裡只需處理分支（OpenSource 圖示）。
+  function currentBranchVersion() {
+    const icon = document.querySelector('.artifact-dropdown-icon.ms-Icon--OpenSource');
+    const name = icon?.closest('button')?.textContent.trim();
+    return name ? `GB${name}` : '';
   }
 
   // format：主 HTML 用 text；其他資源一律用 octetStream——text 會把二進位檔（png/jpg）當文字轉碼而損毀
@@ -32,6 +41,8 @@
     const p = new URLSearchParams({
       path,
       includeContent: 'true',
+      // 與 ADO 自己的請求一致：LFS 追蹤的檔案回傳實際內容，而不是 LFS 指標檔；一般檔案結果不變
+      resolveLfs: 'true',
       'api-version': '7.1',
       '$format': format,
     });
@@ -201,8 +212,10 @@ document.addEventListener('click',function(e){
     const find = () => document.querySelector('iframe[srcdoc]');
     let frame = find();
     if (frame) return frame;
-    const tab = [...document.querySelectorAll('.bolt-tabbar [role="tab"]')]
-      .find((t) => /^preview$/i.test(t.textContent.trim()));
+    // 頁籤文字會隨 ADO 顯示語言改變，先用與 _a=preview 對應的 id 找，文字比對只當備援
+    const tab = document.querySelector('.bolt-tabbar #__bolt-tab-preview')
+      || [...document.querySelectorAll('.bolt-tabbar [role="tab"]')]
+        .find((t) => /^preview$/i.test(t.textContent.trim()));
     if (!tab) throw new Error('找不到 Preview 頁籤');
     tab.click();
     for (let i = 0; i < 40 && !(frame = find()); i++) await sleep(100);
