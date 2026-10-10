@@ -22,6 +22,8 @@ zip -X -r "$OUT" \
   preview.html \
   preview.js \
   sandbox.html \
+  md-core.js md-shell.js md-theme.js \
+  vendor/marked.min.js vendor/purify.min.js vendor/highlight.min.js vendor/mermaid.min.js \
   icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png \
   _locales/en/messages.json _locales/zh_TW/messages.json
 

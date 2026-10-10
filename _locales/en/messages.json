@@ -4,7 +4,7 @@
     "description": "Extension name shown in Chrome and the Web Store."
   },
   "appDesc": {
-    "message": "Preview HTML files in Azure DevOps Repos with JavaScript enabled, inline or full-screen, inside an isolated sandbox.",
+    "message": "Preview HTML with JavaScript enabled, and Markdown with a cleaner themeable layout, in Azure DevOps Repos: inline or full-screen.",
     "description": "Short description (max 132 characters)."
   }
 }

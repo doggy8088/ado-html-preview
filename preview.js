@@ -14,12 +14,20 @@
 
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads');
+  frame.setAttribute('allow', 'fullscreen'); // Markdown 預覽的 mermaid 全螢幕檢視
+  frame.setAttribute('allowfullscreen', '');
   window.addEventListener('message', (ev) => {
     if (ev.source !== frame.contentWindow) return;
     if (ev.data?.type === 'ready') {
       frame.contentWindow.postMessage({ type: 'render', html: data.html }, '*');
     } else if (ev.data?.type === 'title' && ev.data.title) {
       document.title = ev.data.title;
+    } else if (ev.data?.type === 'ado-md-mermaid-request') {
+      // Markdown 預覽要畫 mermaid 圖但 sandbox 內載不到檔案時，由這裡讀擴充功能內的 mermaid 再傳進去
+      fetch(chrome.runtime.getURL('vendor/mermaid.min.js')).then((r) => r.text()).then(
+        (source) => frame.contentWindow.postMessage({ type: 'ado-md-mermaid-source', source }, '*'),
+        (e) => frame.contentWindow.postMessage({ type: 'ado-md-mermaid-source', error: String(e?.message || e) }, '*'),
+      );
     }
   });
   frame.src = chrome.runtime.getURL('sandbox.html');
