@@ -91,10 +91,14 @@
   // 限制：只處理靜態標籤；CSS 內的 url()、腳本在執行期 fetch 的檔案（例如 PDF.js 的 worker 與 .pdf）仍無法取得。
   const ASSET_LIMIT = 60;            // 最多內嵌幾個資源
   const ASSET_MAX_BYTES = 8 * 1024 * 1024;
-  // 所有資源加總的上限（只用於全螢幕模式）：整份 HTML 要放進 chrome.storage.session（配額 10 MB），
-  // base64 後體積再 ×1.33，所以原始位元組總量壓在 6 MB 以內；超過的資源保留原樣不內嵌。
-  // 內嵌模式的 srcdoc 沒有這個限制，不套用。
+  // 全螢幕模式的體積上限：整份 HTML 要放進 chrome.storage.session（配額 10 MB）。
+  //   ASSET_TOTAL_BYTES：資源原始位元組加總（base64 後 ×1.33）的上限，再扣掉主檔本身的大小；
+  //   超過的資源保留原樣不內嵌。內嵌模式的 srcdoc 沒有這個限制，不套用。
+  //   PAYLOAD_MAX_BYTES：最終序列化後的 HTML 上限（留餘裕給 JSON 與標題），超過就直接報錯，
+  //   不送給 background 以免 storage 寫入失敗後才出現不明錯誤。
   const ASSET_TOTAL_BYTES = 6 * 1024 * 1024;
+  const PAYLOAD_MAX_BYTES = 9.5 * 1024 * 1024;
+  const byteSize = (s) => new Blob([s]).size;
 
   function isRelativeRef(ref) {
     return !!ref && !/^[a-z][a-z0-9+.-]*:/i.test(ref) && !ref.startsWith('//') && !ref.startsWith('#') && !ref.startsWith('data:');
@@ -301,6 +305,10 @@ document.addEventListener('click',function(e){
   // assetOpts：傳給 inlineRelativeAssets（全螢幕模式帶 totalBytes）
   async function buildDocument(info, nonce, assetOpts) {
     const source = await fetchSource(info);
+    // 資源上限要先扣掉主檔本身的大小，總量才會真的落在配額內
+    if (assetOpts && assetOpts.totalBytes != null) {
+      assetOpts = { ...assetOpts, totalBytes: Math.max(0, assetOpts.totalBytes - byteSize(source)) };
+    }
     return info.kind === 'md'
       ? buildMarkdownDocument(source, info, nonce, assetOpts)
       : inlineRelativeAssets(source, info, assetOpts);
@@ -389,6 +397,10 @@ document.addEventListener('click',function(e){
     // 全螢幕模式跑在擴充功能的 sandbox 頁（非 srcdoc），#錨點本來就正常；
     // 仍注入連結修正腳本，讓相對路徑連結能開到對應的 Azure DevOps 檔案。sandbox CSP 允許 inline script，nonce 給空字串即可。
     const html = injectBeforeBodyEnd(await buildDocument(info, '', { totalBytes: ASSET_TOTAL_BYTES }), linkFixScript(info, ''));
+    const size = byteSize(html);
+    if (size > PAYLOAD_MAX_BYTES) {
+      throw new Error(`預覽內容 ${(size / 1024 / 1024).toFixed(1)} MB 超過全螢幕模式的暫存上限（10 MB），請改用內嵌預覽`);
+    }
     const title = `${info.path.split('/').pop()} – ${LABELS[info.kind].windowSuffix}`;
     const reply = await chrome.runtime.sendMessage({ type: 'open-preview', html, title });
     if (!reply?.ok) throw new Error(reply?.error || '無法開啟預覽視窗');

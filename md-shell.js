@@ -94,9 +94,15 @@ function renderMermaid(){
   blocks.forEach(function(b,i){
     if(b.__src==null){var pre=b.querySelector('pre');b.__src=pre?pre.textContent:b.textContent;}
     var src=b.__src;var id='md-mermaid-'+i+'-'+Date.now();
+    // 每個區塊的渲染世代：快速切換主題時較早的 render 可能較晚完成，過期的結果一律丟掉，不回寫舊主題的圖
+    var gen=b.__gen=(b.__gen||0)+1;
     b.classList.remove('is-failed');
-    window.mermaid.render(id,src).then(function(res){b.innerHTML=res.svg;if(res.bindFunctions)res.bindFunctions(b);setupMermaidTools(b);},function(err){
+    window.mermaid.render(id,src).then(function(res){
+      if(gen!==b.__gen){var tmp=document.getElementById('d'+id);if(tmp)tmp.remove();return;}
+      b.innerHTML=res.svg;if(res.bindFunctions)res.bindFunctions(b);setupMermaidTools(b);
+    },function(err){
       var stale=document.getElementById('d'+id);if(stale)stale.remove();
+      if(gen!==b.__gen)return;
       b.innerHTML='<pre class="mermaid">'+src.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</pre>';b.classList.add('is-failed');b.setAttribute('data-error',String(err&&err.message||err).split('\\n')[0]);
     });
   });
