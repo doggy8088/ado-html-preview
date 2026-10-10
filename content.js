@@ -91,8 +91,9 @@
   // 限制：只處理靜態標籤；CSS 內的 url()、腳本在執行期 fetch 的檔案（例如 PDF.js 的 worker 與 .pdf）仍無法取得。
   const ASSET_LIMIT = 60;            // 最多內嵌幾個資源
   const ASSET_MAX_BYTES = 8 * 1024 * 1024;
-  // 所有資源加總的上限：全螢幕模式要把整份 HTML 放進 chrome.storage.session（配額 10 MB），
-  // base64 後體積再 ×1.33，所以原始位元組總量壓在 6 MB 以內；超過的資源保留原樣不內嵌
+  // 所有資源加總的上限（只用於全螢幕模式）：整份 HTML 要放進 chrome.storage.session（配額 10 MB），
+  // base64 後體積再 ×1.33，所以原始位元組總量壓在 6 MB 以內；超過的資源保留原樣不內嵌。
+  // 內嵌模式的 srcdoc 沒有這個限制，不套用。
   const ASSET_TOTAL_BYTES = 6 * 1024 * 1024;
 
   function isRelativeRef(ref) {
@@ -108,27 +109,25 @@
 
   const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon', bmp: 'image/bmp' };
 
-  async function fetchAsset(info, repoPath, asText, budget) {
+  // 回傳 { size, value }：size 是原始位元組數（給總量上限用），value 是文字或 data: URL
+  async function fetchAsset(info, repoPath, asText) {
     const res = await fetch(rawUrl({ ...info, path: repoPath }, 'octetStream'), { credentials: 'include' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     if (blob.size > ASSET_MAX_BYTES) throw new Error('too large');
-    if (budget) {
-      if (budget.used + blob.size > ASSET_TOTAL_BYTES) throw new Error('total asset budget exceeded');
-      budget.used += blob.size;
-    }
-    if (asText) return blob.text();
+    if (asText) return { size: blob.size, value: await blob.text() };
     // 回應的 content-type 形如 image/png; api-version=7.1，只取主型別
     const ext = (repoPath.split('.').pop() || '').toLowerCase();
     const mime = MIME[ext] || (res.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let bin = '';
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return `data:${mime};base64,${btoa(bin)}`;
+    return { size: blob.size, value: `data:${mime};base64,${btoa(bin)}` };
   }
 
-
-  async function inlineRelativeAssets(html, info) {
+  // opts.totalBytes：所有資源原始位元組加總的上限（只有全螢幕模式需要，見 ASSET_TOTAL_BYTES）；
+  // 省略 = 不限制總量（內嵌模式）。
+  async function inlineRelativeAssets(html, info, opts = {}) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     if (doc.querySelector('base[href]')) return html; // 作者自己指定了 base，尊重它
 
@@ -149,36 +148,45 @@
     }
     if (!jobs.length) return html;
 
-    const budget = { used: 0 };
-    await Promise.all(jobs.map(async (el) => {
+    // 先平行抓回所有資源，再依固定順序決定哪些納入總量上限：
+    // 腳本與樣式表（缺了整個網頁就壞）優先於圖片，同類之間依 DOM 順序，結果不受回應先後影響。
+    const results = await Promise.all(jobs.map(async (el) => {
       const tag = el.tagName.toLowerCase();
       const ref = el.getAttribute(tag === 'link' ? 'href' : 'src');
-      let repoPath;
-      try { repoPath = resolveRepoPath(ref, info); } catch { return; }
       try {
-        if (tag === 'script') {
-          const code = await fetchAsset(info, repoPath, true, budget);
-          const inline = doc.createElement('script');
-          for (const a of el.attributes) if (a.name !== 'src') inline.setAttribute(a.name, a.value);
-          inline.setAttribute('data-inlined-from', ref);
-          // 內嵌後 JS 原始碼裡若含 </script 會提前結束標籤，改寫成 <\/script（字串語意不變）
-          inline.textContent = code.replace(/<\/script/gi, '<\\/script');
-          el.replaceWith(inline);
-        } else if (tag === 'link') {
-          const css = await fetchAsset(info, repoPath, true, budget);
-          const style = doc.createElement('style');
-          style.setAttribute('data-inlined-from', ref);
-          if (el.media) style.setAttribute('media', el.media);
-          style.textContent = css.replace(/<\/style/gi, '<\\/style');
-          el.replaceWith(style);
-        } else {
-          el.setAttribute('src', await fetchAsset(info, repoPath, false, budget));
-        }
+        const repoPath = resolveRepoPath(ref, info);
+        return { el, tag, ref, asset: await fetchAsset(info, repoPath, tag !== 'img') };
       } catch (e) {
-        // 抓不到就保留原樣，不影響其他資源
-        el.setAttribute('data-inline-failed', String(e && e.message || e));
+        return { el, tag, ref, error: String(e && e.message || e) };
       }
     }));
+    const order = (r) => (r.tag === 'img' ? 1 : 0);
+    let used = 0;
+    for (const r of results.slice().sort((a, b) => order(a) - order(b))) {
+      const { el, tag, ref } = r;
+      if (r.error) { el.setAttribute('data-inline-failed', r.error); continue; } // 抓不到就保留原樣，不影響其他資源
+      if (opts.totalBytes != null && used + r.asset.size > opts.totalBytes) {
+        el.setAttribute('data-inline-failed', 'total asset budget exceeded');
+        continue;
+      }
+      used += r.asset.size;
+      if (tag === 'script') {
+        const inline = doc.createElement('script');
+        for (const a of el.attributes) if (a.name !== 'src') inline.setAttribute(a.name, a.value);
+        inline.setAttribute('data-inlined-from', ref);
+        // 內嵌後 JS 原始碼裡若含 </script 會提前結束標籤，改寫成 <\/script（字串語意不變）
+        inline.textContent = r.asset.value.replace(/<\/script/gi, '<\\/script');
+        el.replaceWith(inline);
+      } else if (tag === 'link') {
+        const style = doc.createElement('style');
+        style.setAttribute('data-inlined-from', ref);
+        if (el.media) style.setAttribute('media', el.media);
+        style.textContent = r.asset.value.replace(/<\/style/gi, '<\\/style');
+        el.replaceWith(style);
+      } else {
+        el.setAttribute('src', r.asset.value);
+      }
+    }
 
     const doctype = doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>` : '<!DOCTYPE html>';
     return doctype + '\n' + doc.documentElement.outerHTML;
@@ -267,14 +275,14 @@ document.addEventListener('click',function(e){
 
   // 把 Markdown 原始碼轉成完整的預覽 HTML 文件（含主題、目錄、bootstrap 腳本），
   // 並把相對路徑的圖片透過 Git Items API 抓回來內嵌。
-  async function buildMarkdownDocument(md, info, nonce) {
+  async function buildMarkdownDocument(md, info, nonce, assetOpts) {
     const r = AdoMarkdown.render(md);
     const fileName = info.path.split('/').pop(); // path 來自 URLSearchParams，已經是解碼後的值
     const doc = AdoMarkdownShell.buildDocument({
       html: r.html, toc: r.toc, title: r.title, fileName,
       theme: adoTheme(), nonce, mermaidSrc: r.hasMermaid ? MERMAID_URL : '', mermaidFallback: true,
     });
-    return inlineRelativeAssets(doc, info);
+    return inlineRelativeAssets(doc, info, assetOpts);
   }
 
   // mermaid 的備援載入：sandbox iframe（origin 為 null）直接 <script src="chrome-extension://…"> 可能被擋，
@@ -290,11 +298,12 @@ document.addEventListener('click',function(e){
   });
 
   // 依檔案類型產生要放進 sandbox 的完整 HTML（尚未補 nonce / 連結修正腳本）
-  async function buildDocument(info, nonce) {
+  // assetOpts：傳給 inlineRelativeAssets（全螢幕模式帶 totalBytes）
+  async function buildDocument(info, nonce, assetOpts) {
     const source = await fetchSource(info);
     return info.kind === 'md'
-      ? buildMarkdownDocument(source, info, nonce)
-      : inlineRelativeAssets(source, info);
+      ? buildMarkdownDocument(source, info, nonce, assetOpts)
+      : inlineRelativeAssets(source, info, assetOpts);
   }
 
   // ---------- 1. 內嵌 ----------
@@ -303,7 +312,8 @@ document.addEventListener('click',function(e){
   // 做法：把原節點隱藏、把我們的 iframe 插在它後面；換檔案或 ADO 重建預覽區塊時再把 iframe 移除、恢復原節點。
   let active = null; // { key, frame, old, oldDisplay }
 
-  const previewKey = (info) => `${info.path}|${new URLSearchParams(location.search).get('version') || ''}`;
+  // key 用 info.version（網址的 version= 或版本選擇器上推斷的分支），切換分支時即使網址沒變也會重建
+  const previewKey = (info) => `${info.path}|${info.version}`;
 
   function clearInlinePreview() {
     if (!active) return;
@@ -316,7 +326,10 @@ document.addEventListener('click',function(e){
   function reconcileInlinePreview() {
     if (!active) return;
     const info = parseLocation();
-    if (!info || previewKey(info) !== active.key || !active.old.isConnected || !active.frame.isConnected) clearInlinePreview();
+    if (!info || !active.old.isConnected || !active.frame.isConnected) { clearInlinePreview(); return; }
+    // 版本選擇器在 SPA 重繪時可能暫時不存在（info.version 為空），這時無法判斷分支，不要誤清
+    if (!info.version && !new URLSearchParams(location.search).get('version')) return;
+    if (previewKey(info) !== active.key) clearInlinePreview();
   }
 
   async function renderInline() {
@@ -367,7 +380,7 @@ document.addEventListener('click',function(e){
     if (!info) return;
     // 全螢幕模式跑在擴充功能的 sandbox 頁（非 srcdoc），#錨點本來就正常；
     // 仍注入連結修正腳本，讓相對路徑連結能開到對應的 Azure DevOps 檔案。sandbox CSP 允許 inline script，nonce 給空字串即可。
-    const html = injectBeforeBodyEnd(await buildDocument(info, ''), linkFixScript(info, ''));
+    const html = injectBeforeBodyEnd(await buildDocument(info, '', { totalBytes: ASSET_TOTAL_BYTES }), linkFixScript(info, ''));
     const title = `${info.path.split('/').pop()} – ${LABELS[info.kind].windowSuffix}`;
     const reply = await chrome.runtime.sendMessage({ type: 'open-preview', html, title });
     if (!reply?.ok) throw new Error(reply?.error || '無法開啟預覽視窗');

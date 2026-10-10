@@ -101,16 +101,21 @@
   function tocHtml(toc, className) {
     if (!toc.length) return '';
     // 以最淺的層級為基準，讓只用 h2/h3 的文件也從第一層開始縮排
+    // 子層的 <ul> 要放在父項目的 <li> 裡面（父 <li> 在子清單結束後才關閉），才是合法且語意正確的巢狀清單；
+    // 層級跳躍（h1 直接接 h3）視為只深一層，避免產生沒有 <li> 的空殼 <ul>。
     const min = Math.min(...toc.map((t) => t.level));
     let html = '';
-    let depth = 0;
+    let depth = 0;           // 目前打開的 <ul> 層數
+    const liOpen = [];       // liOpen[d]：第 d 層目前是否有尚未關閉的 <li>
     for (const t of toc) {
-      const level = t.level - min + 1;
-      while (depth < level) { html += depth ? '<ul>' : `<ul class="${className}">`; depth++; }
-      while (depth > level) { html += '</ul>'; depth--; }
-      html += `<li><a href="#${t.id}">${t.text}</a></li>`;
+      const level = Math.min(t.level - min + 1, depth + 1);
+      while (depth > level) { if (liOpen[depth]) html += '</li>'; html += '</ul>'; liOpen[depth] = false; depth--; }
+      if (depth === level && liOpen[depth]) html += '</li>';
+      while (depth < level) { html += depth ? '<ul>' : `<ul class="${className}">`; depth++; liOpen[depth] = false; }
+      html += `<li><a href="#${t.id}">${t.text}</a>`;
+      liOpen[depth] = true;
     }
-    while (depth > 0) { html += '</ul>'; depth--; }
+    while (depth > 0) { if (liOpen[depth]) html += '</li>'; html += '</ul>'; depth--; }
     return html;
   }
 
