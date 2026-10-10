@@ -61,6 +61,8 @@ document.addEventListener('click',function(e){
 // 直接 <script src> 失敗時（sandbox iframe 的 origin 為 null，可能載不到擴充功能內的檔案），
 // 改向父頁面要原始碼（content script / preview.js 會回 ado-md-mermaid-source），以帶 nonce 的 inline script 注入。
 var mermaidState='idle';
+// mermaid 11 會呼叫 URL.canParse（Chrome 120 才有），擴充功能最低支援 Chrome 112，先補上同義的 polyfill
+if(typeof URL!=='undefined'&&typeof URL.canParse!=='function'){URL.canParse=function(u,b){try{new URL(u,b);return true;}catch(e){return false;}};}
 function mermaidFailed(){mermaidState='failed';renderMermaid();}
 function requestFromParent(){
   // 父頁面沒有回應端（例如 Tampermonkey 版本）時直接判定失敗，不用等逾時
