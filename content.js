@@ -398,11 +398,13 @@ document.addEventListener('click',function(e){
     // 全螢幕模式跑在擴充功能的 sandbox 頁（非 srcdoc），#錨點本來就正常；
     // 仍注入連結修正腳本，讓相對路徑連結能開到對應的 Azure DevOps 檔案。sandbox CSP 允許 inline script，nonce 給空字串即可。
     const html = injectBeforeBodyEnd(await buildDocument(info, '', { totalBytes: ASSET_TOTAL_BYTES }), linkFixScript(info, ''));
-    const size = byteSize(html);
+    const title = `${info.path.split('/').pop()} – ${LABELS[info.kind].windowSuffix}`;
+    // chrome.storage.session 的配額算的是 JSON 序列化後的大小（含跳脫字元、key 與標題），
+    // 所以用與 background 寫入時相同的物件來量，而不是只量 HTML 字串
+    const size = byteSize(JSON.stringify({ html, title }));
     if (size > PAYLOAD_MAX_BYTES) {
       throw new Error(`預覽內容 ${(size / 1024 / 1024).toFixed(1)} MB 超過全螢幕模式的暫存上限（10 MB），請改用內嵌預覽`);
     }
-    const title = `${info.path.split('/').pop()} – ${LABELS[info.kind].windowSuffix}`;
     const reply = await chrome.runtime.sendMessage({ type: 'open-preview', html, title });
     if (!reply?.ok) throw new Error(reply?.error || '無法開啟預覽視窗');
   }
