@@ -332,15 +332,23 @@ document.addEventListener('click',function(e){
     if (previewKey(info) !== active.key) clearInlinePreview();
   }
 
+  // 每次 renderInline 的世代編號：抓檔期間若使用者切到別的檔案並開了新的預覽，舊的那次完成後要直接放棄，
+  // 不能清掉新預覽、把舊內容塞進已失效的節點
+  let renderGen = 0;
+
   async function renderInline() {
     const info = parseLocation();
     if (!info) return;
+    const gen = ++renderGen;
     clearInlinePreview();
     // srcdoc 會繼承 dev.azure.com 的 CSP（script-src 'nonce-…' 'strict-dynamic'），
     // 所以每個 <script> 都要帶上同一個 nonce 才會被允許執行。
     const nonce = getNonce();
     const [html, old] = await Promise.all([buildDocument(info, nonce), ensurePreviewTarget(info.kind)]);
-    clearInlinePreview(); // 等待期間若使用者又按了一次，先清掉
+    // 等待期間有更新的一次 renderInline、或使用者已切到別的檔案 / 分支：這次的結果作廢
+    const now = parseLocation();
+    if (gen !== renderGen || !now || previewKey(now) !== previewKey(info) || !old.isConnected) return;
+    clearInlinePreview(); // 這次是最新的；若仍有舊預覽（例如同一檔案重按），先清掉
 
     // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上
     let doc = info.kind === 'md' || !nonce ? html : html.replace(/<script\b/gi, `<script nonce="${nonce}"`);
