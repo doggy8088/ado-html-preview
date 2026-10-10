@@ -32,7 +32,8 @@ document.addEventListener('click',function(e){
 // 目錄：點擊後在窄版面自動收合；捲動時高亮目前段落
 var toc=document.querySelector('.md-toc');
 if(toc){
-  toc.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(a&&window.innerWidth<1100){root.setAttribute('data-toc','closed');}});
+  // 只有側欄以浮出面板呈現的窄版面（< 800px，與樣式表的斷點一致）才在點選後自動收合，並同步切換鈕的 aria-expanded
+  toc.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(a&&window.innerWidth<800){root.setAttribute('data-toc','closed');var tb=document.querySelector('[data-action="toc"]');if(tb)tb.setAttribute('aria-expanded','false');}});
   var links=[].slice.call(toc.querySelectorAll('a[href^="#"]'));
   var byId={};links.forEach(function(a){byId[decodeURIComponent(a.getAttribute('href').slice(1))]=a;});
   var heads=[].slice.call(document.querySelectorAll('.md-content h1[id],.md-content h2[id],.md-content h3[id],.md-content h4[id],.md-content h5[id],.md-content h6[id]')).filter(function(h){return byId[h.id];});
@@ -128,7 +129,8 @@ function svgSize(svg){
 // 圖表 svg 一定是 .md-mermaid 的直接子元素；工具列裡的圖示也是 svg，所以要用 :scope > svg 區分
 function setupMermaidTools(b){
   var svg=b.querySelector(':scope > svg');if(!svg)return;
-  b.__zoom=1;b.__maxWidth=svg.style.maxWidth||'';
+  // 重畫（例如換主題）後是全新的 svg：縮放狀態、靠左 class 與快取的基準寬度都要歸零
+  b.__zoom=1;b.__base=null;b.classList.remove('is-zoomed');b.__maxWidth=svg.style.maxWidth||'';
   // 工具列放在 svg 前面、高度 0 且 sticky left:0：圖放大後水平捲動時工具列仍停在可見區的右上角
   var tools=document.createElement('div');tools.className='md-mz-tools';
   tools.innerHTML='<div class="md-mz-bar" role="toolbar" aria-label="圖表縮放">'+mzBtn('out','縮小')+'<button type="button" class="md-mz-btn md-mz-pct" data-mz="reset" title="重設為 100%">100%</button>'+mzBtn('in','放大')+mzBtn('full','全螢幕檢視')+'</div>';

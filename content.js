@@ -251,10 +251,11 @@ document.addEventListener('click',function(e){
   //   HTML → ADO 的 srcdoc iframe；Markdown → ADO 自己渲染的 .markdown-preview-container。
   // 不含我們自己建立的 iframe（呼叫前會先 clearInlinePreview）。
   async function ensurePreviewTarget(kind) {
-    const selector = kind === 'md'
-      ? '.markdown-preview-container, .files-hub-content-preview'
-      : `iframe[srcdoc]:not([${FRAME_ATTR}])`;
-    const find = () => document.querySelector(selector);
+    // Markdown：優先找 .markdown-preview-container，找不到才退回較外層的 .files-hub-content-preview
+    //（selector list 會回傳文件順序最前的元素，兩者巢狀時會抓到外層，所以要分開查）
+    const find = kind === 'md'
+      ? () => document.querySelector('.markdown-preview-container') || document.querySelector('.files-hub-content-preview')
+      : () => document.querySelector(`iframe[srcdoc]:not([${FRAME_ATTR}])`);
     let frame = find();
     if (frame) return frame;
     // 頁籤文字會隨 ADO 顯示語言改變，先用與 _a=preview 對應的 id 找，文字比對只當備援
