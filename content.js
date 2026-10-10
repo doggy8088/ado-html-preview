@@ -170,7 +170,8 @@
         if (budgeted && remaining <= 0) throw new Error('total asset budget exceeded');
         const repoPath = resolveRepoPath(r.ref, info);
         const fetched = await fetchAssetBlob(info, repoPath);
-        if (budgeted && fetched.blob.size > remaining) throw new Error('total asset budget exceeded');
+        // 一旦有資源放不進剩餘額度就視為額度用盡：後面（優先序更低）的資源直接略過，不再逐一下載後丟棄
+        if (budgeted && fetched.blob.size > remaining) { remaining = 0; throw new Error('total asset budget exceeded'); }
         remaining -= fetched.blob.size;
         r.value = await assetValue(fetched, repoPath, r.tag !== 'img');
       } catch (e) {
