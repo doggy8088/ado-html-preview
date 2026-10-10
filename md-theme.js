@@ -6,7 +6,8 @@
 // - 字型：系統堆疊（Segoe UI / PingFang TC / Noto Sans TC / Microsoft JhengHei），等寬 SF Mono / Menlo / Consolas / Cascadia。
 // - 字級與行高：正文 16px / 1.8（≤640px 時 15px / 1.75），文章欄 904px 置中（含 48px 內距）；
 //   h1 32px + 下方 1px 墨線作「刊頭」，h2 23px 以「上方 64px 留白 + 1px 強灰線 + 20px 內距」切分章節，
-//   h3–h6 只靠字級遞減，標題緊接標題時自動收緊；表格 14px / 1.6，程式碼 13.5px / 1.65。
+//   h3 文字下方一段主色短線、h4 前置實心主色方塊、h5 前置空心方塊、h6 小字大寫灰字（每級都有自己的記號，不只靠字級），
+//   標題緊接標題時自動收緊；表格 14px / 1.6，程式碼 13.5px / 1.65。
 // - 版面：.md-bar 48px 固定（Command Bar 風格，CSS 文件圖示）；.md-toc 272px 常駐側欄（800–1099px 收為 232px，
 //   <800px 浮出面板），Fluent Nav 的 3px 圓角選取指示條，長標題換行不截斷；.md-main 是唯一捲動容器（position: relative）。
 // - 表格：DetailsList 風格卡片，.md-table-wrap 用 overflow: clip（不是捲動容器），表頭因此能 sticky 在 .md-main 頂端、
@@ -429,7 +430,9 @@ html[data-toc="none"] .md-toc { display: none; }
 }
 .md-content p > img:only-child { display: block; margin: 8px auto; }
 
-/* ---------- 標題：全部同色，層級靠字級 / 字重 / 分隔線 ---------- */
+/* ---------- 標題：每一級都有自己的視覺記號，不只靠字級 ----------
+   h1 刊頭墨線｜h2 上方分隔線 + 左側主色粗條｜h3 文字下方一小段主色短線｜
+   h4 前置實心主色方塊｜h5 前置空心方塊｜h6 小字大寫灰字 */
 .md-content h1, .md-content h2, .md-content h3,
 .md-content h4, .md-content h5, .md-content h6 {
   position: relative;
@@ -453,17 +456,63 @@ html[data-toc="none"] .md-toc { display: none; }
   border-bottom: 1px solid var(--fg);
 }
 
-/* h2：章節，上方留白 + 強灰線 + 內距，構成全頁垂直節奏 */
+/* h2：章節，上方留白 + 強灰線 + 內距構成全頁垂直節奏；左側一條主色粗條，一眼就知道是章節標題 */
 .md-content h2 {
   font-size: 23px;
+  font-weight: 700;
   margin: 64px 0 18px;
-  padding-top: 20px;
+  padding: 20px 0 0 16px;
   border-top: 1px solid var(--line-strong);
 }
+.md-content h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20px;
+  bottom: 0;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
 
-.md-content h3 { font-size: 19px; margin: 40px 0 12px; }
-.md-content h4 { font-size: 17px; margin: 32px 0 10px; }
-.md-content h5 { font-size: 16px; margin: 28px 0 8px; }
+/* h3：文字下方一小段主色短線 */
+.md-content h3 {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 40px 0 14px;
+  padding-bottom: 8px;
+}
+.md-content h3::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* h4：前置實心主色方塊；h5：前置空心方塊，比 h4 再輕一級 */
+.md-content h4 { font-size: 17px; font-weight: 700; margin: 32px 0 10px; }
+.md-content h5 { font-size: 16px; font-weight: 700; margin: 28px 0 8px; color: var(--fg-2); }
+.md-content h4::before, .md-content h5::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin: 0 10px 0 1px;
+  vertical-align: 1px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.md-content h5::before {
+  width: 7px;
+  height: 7px;
+  background: transparent;
+  border: 2px solid var(--accent);
+  vertical-align: 1px;
+}
 .md-content h6 {
   font-size: 13px;
   margin: 28px 0 8px;
@@ -474,10 +523,12 @@ html[data-toc="none"] .md-toc { display: none; }
 
 /* 標題緊接標題時收緊 */
 .md-content h1 + h2 { margin-top: 24px; padding-top: 0; border-top: 0; }
+.md-content h1 + h2::before { top: 0; }
 .md-content h2 + h3, .md-content h3 + h4,
 .md-content h4 + h5, .md-content h5 + h6 { margin-top: 16px; }
 /* 文件第一個元素若是 h2，不要上線 */
 .md-content > h2:first-child { padding-top: 0; border-top: 0; }
+.md-content > h2:first-child::before { top: 0; }
 
 /* 段落錨點：浮在標題左側，hover 才顯示 */
 .md-anchor {
@@ -493,7 +544,8 @@ html[data-toc="none"] .md-toc { display: none; }
   opacity: 0;
   transition: opacity var(--dur) var(--ease);
 }
-.md-content h2 > .md-anchor { top: 20px; }
+.md-content h2 > .md-anchor { top: 20px; left: calc(-1.5em - 4px); }
+.md-content h1 + h2 > .md-anchor, .md-content > h2:first-child > .md-anchor { top: 0; }
 .md-content h1:hover .md-anchor, .md-content h2:hover .md-anchor,
 .md-content h3:hover .md-anchor, .md-content h4:hover .md-anchor,
 .md-content h5:hover .md-anchor, .md-content h6:hover .md-anchor,
@@ -889,16 +941,115 @@ html[data-toc="none"] .md-toc { display: none; }
 }
 .md-mermaid svg { max-width: 100%; height: auto; display: inline-block; }
 html[data-theme="dark"] .md-mermaid { background: var(--bg-sunken); }
+.md-mermaid { position: relative; }
+.md-mermaid.is-zoomed { text-align: start; }   /* 放大後靠左，水平捲動才能看到左緣 */
 
-/* mermaid 主題會在 svg 內寫死邊標籤底色，改用面板色以免在深色模式出現灰塊 */
-.md-mermaid .edgeLabel,
-.md-mermaid .edgeLabel p,
-.md-mermaid .edgeLabel .labelBkg { background-color: var(--bg-surface) !important; }
-.md-mermaid .edgeLabel rect { fill: var(--bg-surface) !important; opacity: 1 !important; }
-html[data-theme="dark"] .md-mermaid .edgeLabel,
-html[data-theme="dark"] .md-mermaid .edgeLabel p,
-html[data-theme="dark"] .md-mermaid .edgeLabel .labelBkg { background-color: var(--bg-sunken) !important; }
-html[data-theme="dark"] .md-mermaid .edgeLabel rect { fill: var(--bg-sunken) !important; }
+/* 圖表縮放工具列：hover 或放大後才顯示。外層高度 0 並 sticky，放大後水平捲動時仍停在可見區右上角 */
+.md-mz-tools {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  height: 0;
+  margin: -12px -12px 0 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.md-mz-bar {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.md-mermaid:hover .md-mz-bar,
+.md-mz-bar:focus-within,
+.md-mermaid.is-zoomed .md-mz-bar { opacity: 1; }
+@media (hover: none) { .md-mz-bar { opacity: 1; } }
+.md-mz-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-2);
+  font: 600 12px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.md-mz-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.md-mz-btn:active { background: var(--bg-pressed); }
+.md-mz-pct { min-width: 46px; }
+.md-mz-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--line-strong); }
+
+/* 全螢幕檢視（lightbox）：覆蓋整個預覽區；能用 Fullscreen API 時會進入真正的全螢幕 */
+.md-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-app);
+  color: var(--fg);
+  outline: none;
+}
+.md-lightbox-tools { position: absolute; top: 12px; right: 12px; z-index: 2; opacity: 1; box-shadow: var(--shadow-8); }
+.md-lightbox-stage {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  background:
+    linear-gradient(var(--line-faint) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, var(--line-faint) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--bg-surface);
+}
+html[data-theme="dark"] .md-lightbox-stage { background-color: var(--bg-sunken); }
+.md-lightbox-stage.is-dragging { cursor: grabbing; }
+.md-lightbox-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.md-lightbox-canvas svg { display: block; }
+.md-lightbox-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+  white-space: nowrap;
+}
+html[data-lightbox="open"] .md-main { overflow: hidden; }
+.md-lightbox:fullscreen { background: var(--bg-app); }
+
+/* mermaid 主題會在 svg 內寫死邊標籤底色，改用面板色以免在深色模式出現灰塊（lightbox 內的複本也一樣） */
+.md-mermaid .edgeLabel, .md-lightbox .edgeLabel,
+.md-mermaid .edgeLabel p, .md-lightbox .edgeLabel p,
+.md-mermaid .edgeLabel .labelBkg, .md-lightbox .edgeLabel .labelBkg { background-color: var(--bg-surface) !important; }
+.md-mermaid .edgeLabel rect, .md-lightbox .edgeLabel rect { fill: var(--bg-surface) !important; opacity: 1 !important; }
+html[data-theme="dark"] .md-mermaid .edgeLabel, html[data-theme="dark"] .md-lightbox .edgeLabel,
+html[data-theme="dark"] .md-mermaid .edgeLabel p, html[data-theme="dark"] .md-lightbox .edgeLabel p,
+html[data-theme="dark"] .md-mermaid .edgeLabel .labelBkg, html[data-theme="dark"] .md-lightbox .edgeLabel .labelBkg { background-color: var(--bg-sunken) !important; }
+html[data-theme="dark"] .md-mermaid .edgeLabel rect, html[data-theme="dark"] .md-lightbox .edgeLabel rect { fill: var(--bg-sunken) !important; }
 
 .md-mermaid pre.mermaid {
   margin: 0;
@@ -1039,6 +1190,7 @@ html[data-theme="dark"] .md-mermaid .edgeLabel rect { fill: var(--bg-sunken) !im
   .md-content { padding: 24px 16px 64px; }
   .md-content h1 { font-size: 26px; }
   .md-content h2 { font-size: 21px; margin-top: 40px; padding-top: 16px; }
+  .md-content h2::before { top: 16px; }
   .md-content h3 { font-size: 18px; }
   .md-anchor { display: none; }
   .md-toc-inline { columns: 1; }
@@ -1065,6 +1217,7 @@ html[data-theme="dark"] .md-mermaid .edgeLabel rect { fill: var(--bg-sunken) !im
   .md-code { box-shadow: none; break-inside: avoid; }
   .md-copy { display: none; }
   .md-anchor { display: none; }
+  .md-mz-tools, .md-lightbox { display: none; }
 }
 `;
   root.AdoMarkdownTheme = { css };

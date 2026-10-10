@@ -14,6 +14,8 @@
 
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads');
+  frame.setAttribute('allow', 'fullscreen'); // Markdown 預覽的 mermaid 全螢幕檢視
+  frame.setAttribute('allowfullscreen', '');
   window.addEventListener('message', (ev) => {
     if (ev.source !== frame.contentWindow) return;
     if (ev.data?.type === 'ready') {

@@ -340,6 +340,9 @@ document.addEventListener('click',function(e){
     f.style.cssText = `width:100%;height:80vh;border:0;background:${bg};display:block`;
     // 刻意不加 allow-same-origin：頁面腳本無法存取 Azure DevOps 的 cookie / session
     f.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals');
+    // 讓 Markdown 預覽的 mermaid 全螢幕檢視能用 Fullscreen API（不給也能運作，只會蓋滿預覽區）
+    f.setAttribute('allow', 'fullscreen');
+    f.setAttribute('allowfullscreen', '');
     f.srcdoc = doc;
     const oldDisplay = old.style.display;
     old.insertAdjacentElement('afterend', f);

@@ -22,7 +22,7 @@ var root=document.documentElement;
 function prefersDark(){try{return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;}catch(e){return false;}}
 var q=null;try{q=new URLSearchParams(location.search).get('theme');}catch(e){}
 var theme=q||cfg.theme;if(theme!=='light'&&theme!=='dark')theme=prefersDark()?'dark':'light';
-function applyTheme(t){theme=t;root.setAttribute('data-theme',t);var b=document.querySelector('[data-action="theme"]');if(b)b.setAttribute('aria-label',t==='dark'?'切換為淺色':'切換為深色');renderMermaid();}
+function applyTheme(t){theme=t;root.setAttribute('data-theme',t);if(typeof closeLightbox==='function')closeLightbox();var b=document.querySelector('[data-action="theme"]');if(b)b.setAttribute('aria-label',t==='dark'?'切換為淺色':'切換為深色');renderMermaid();}
 document.addEventListener('click',function(e){
   var btn=e.target&&e.target.closest?e.target.closest('[data-action]'):null;if(!btn)return;
   var act=btn.getAttribute('data-action');
@@ -93,12 +93,111 @@ function renderMermaid(){
     if(b.__src==null){var pre=b.querySelector('pre');b.__src=pre?pre.textContent:b.textContent;}
     var src=b.__src;var id='md-mermaid-'+i+'-'+Date.now();
     b.classList.remove('is-failed');
-    window.mermaid.render(id,src).then(function(res){b.innerHTML=res.svg;if(res.bindFunctions)res.bindFunctions(b);},function(err){
+    window.mermaid.render(id,src).then(function(res){b.innerHTML=res.svg;if(res.bindFunctions)res.bindFunctions(b);setupMermaidTools(b);},function(err){
       var stale=document.getElementById('d'+id);if(stale)stale.remove();
       b.innerHTML='<pre class="mermaid">'+src.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</pre>';b.classList.add('is-failed');b.setAttribute('data-error',String(err&&err.message||err).split('\\n')[0]);
     });
   });
 }
+// ---- mermaid 縮放與全螢幕 ----
+// 圖上方右側的工具列：縮小 / 百分比（點一下重設）/ 放大 / 全螢幕；Ctrl(⌘)+滾輪也能縮放。
+// 全螢幕是把 svg 複製到覆蓋整個預覽的 lightbox，支援滾輪縮放、拖曳平移、雙擊貼齊、Esc 關閉；
+// 能用 Fullscreen API 時會順便把 lightbox 送進真正的全螢幕（需要 iframe 的 allow="fullscreen"），不行就只蓋滿預覽區。
+var MZ_ICON={
+  'in':'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M7 2h2v5h5v2H9v5H7V9H2V7h5z"/></svg>',
+  out:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2 7h12v2H2z"/></svg>',
+  full:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2 2h5v2H4v3H2zM9 2h5v5h-2V4H9zM2 9h2v3h3v2H2zM12 9h2v5H9v-2h3z"/></svg>',
+  fit:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M2 2h12v12H2zm2 2v8h8V4zM5 5h6v6H5z" fill-rule="evenodd"/></svg>',
+  close:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3.3 2 8 6.7 12.7 2 14 3.3 9.3 8 14 12.7 12.7 14 8 9.3 3.3 14 2 12.7 6.7 8 2 3.3z"/></svg>'
+};
+function mzBtn(act,label,extra){return '<button type="button" class="md-mz-btn'+(extra?' '+extra:'')+'" data-mz="'+act+'" aria-label="'+label+'" title="'+label+'">'+(MZ_ICON[act]||'')+'</button>';}
+function clampZoom(z){return Math.min(8,Math.max(0.25,z));}
+function svgSize(svg){
+  var vb=svg.viewBox&&svg.viewBox.baseVal;
+  if(vb&&vb.width&&vb.height)return{w:vb.width,h:vb.height};
+  var r=svg.getBoundingClientRect();return{w:r.width||600,h:r.height||400};
+}
+// 圖表 svg 一定是 .md-mermaid 的直接子元素；工具列裡的圖示也是 svg，所以要用 :scope > svg 區分
+function setupMermaidTools(b){
+  var svg=b.querySelector(':scope > svg');if(!svg)return;
+  b.__zoom=1;b.__maxWidth=svg.style.maxWidth||'';
+  // 工具列放在 svg 前面、高度 0 且 sticky left:0：圖放大後水平捲動時工具列仍停在可見區的右上角
+  var tools=document.createElement('div');tools.className='md-mz-tools';
+  tools.innerHTML='<div class="md-mz-bar" role="toolbar" aria-label="圖表縮放">'+mzBtn('out','縮小')+'<button type="button" class="md-mz-btn md-mz-pct" data-mz="reset" title="重設為 100%">100%</button>'+mzBtn('in','放大')+mzBtn('full','全螢幕檢視')+'</div>';
+  b.insertBefore(tools,b.firstChild);
+  b.addEventListener('wheel',function(e){if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();inlineZoom(b,b.__zoom*(e.deltaY<0?1.1:1/1.1));},{passive:false});
+}
+function inlineZoom(b,z){
+  var svg=b.querySelector(':scope > svg');if(!svg)return;
+  z=clampZoom(z);
+  if(Math.abs(z-1)<0.01){z=1;svg.style.width='';svg.style.maxWidth=b.__maxWidth;b.classList.remove('is-zoomed');}
+  else{
+    if(!b.__base){var r=svg.getBoundingClientRect();b.__base=r.width||svgSize(svg).w;}
+    svg.style.maxWidth='none';svg.style.width=Math.round(b.__base*z)+'px';svg.style.height='auto';b.classList.add('is-zoomed');
+  }
+  b.__zoom=z;var pct=b.querySelector('.md-mz-pct');if(pct)pct.textContent=Math.round(z*100)+'%';
+}
+document.addEventListener('click',function(e){
+  var btn=e.target&&e.target.closest?e.target.closest('.md-mermaid .md-mz-btn'):null;if(!btn)return;
+  var b=btn.closest('.md-mermaid');var act=btn.getAttribute('data-mz');
+  if(act==='in')inlineZoom(b,b.__zoom*1.25);else if(act==='out')inlineZoom(b,b.__zoom/1.25);else if(act==='reset')inlineZoom(b,1);else if(act==='full')openLightbox(b);
+});
+var lightbox=null;
+function openLightbox(b){
+  var svg=b.querySelector(':scope > svg');if(!svg)return;
+  closeLightbox();
+  var size=svgSize(svg);
+  var lb=document.createElement('div');lb.className='md-lightbox';lb.setAttribute('role','dialog');lb.setAttribute('aria-modal','true');lb.setAttribute('aria-label','Mermaid 圖表全螢幕檢視');lb.tabIndex=-1;
+  lb.innerHTML='<div class="md-mz-bar md-lightbox-tools" role="toolbar" aria-label="圖表縮放">'+mzBtn('out','縮小')+'<button type="button" class="md-mz-btn md-mz-pct" data-lb="reset" title="重設為 100%">100%</button>'+mzBtn('in','放大')+mzBtn('fit','貼齊視窗')+'<span class="md-mz-sep"></span>'+mzBtn('close','關閉（Esc）')+'</div>'
+    +'<div class="md-lightbox-stage"><div class="md-lightbox-canvas"></div></div>'
+    +'<div class="md-lightbox-hint">滾輪縮放 · 拖曳平移 · 雙擊貼齊 · Esc 關閉</div>';
+  var stage=lb.querySelector('.md-lightbox-stage'),canvas=lb.querySelector('.md-lightbox-canvas'),pct=lb.querySelector('.md-mz-pct');
+  var clone=svg.cloneNode(true);clone.removeAttribute('width');clone.removeAttribute('height');clone.style.maxWidth='none';clone.style.width=size.w+'px';clone.style.height=size.h+'px';
+  canvas.appendChild(clone);
+  var s=1,tx=0,ty=0;
+  function apply(){canvas.style.transform='translate('+tx+'px,'+ty+'px) scale('+s+')';pct.textContent=Math.round(s*100)+'%';}
+  function fit(){var W=stage.clientWidth,H=stage.clientHeight;s=Math.min(Math.min((W-48)/size.w,(H-48)/size.h),2);if(!(s>0))s=1;tx=(W-size.w*s)/2;ty=(H-size.h*s)/2;apply();}
+  function zoomAt(f,mx,my){var ns=Math.min(10,Math.max(0.1,s*f));tx=mx-(mx-tx)*(ns/s);ty=my-(my-ty)*(ns/s);s=ns;apply();}
+  function center(){var r=stage.getBoundingClientRect();return{x:r.width/2,y:r.height/2};}
+  stage.addEventListener('wheel',function(e){e.preventDefault();var r=stage.getBoundingClientRect();zoomAt(Math.exp(-e.deltaY*0.0015),e.clientX-r.left,e.clientY-r.top);},{passive:false});
+  var drag=null;
+  stage.addEventListener('pointerdown',function(e){if(e.button!==0)return;drag={x:e.clientX,y:e.clientY,tx:tx,ty:ty};stage.setPointerCapture(e.pointerId);stage.classList.add('is-dragging');});
+  stage.addEventListener('pointermove',function(e){if(!drag)return;tx=drag.tx+(e.clientX-drag.x);ty=drag.ty+(e.clientY-drag.y);apply();});
+  function endDrag(){drag=null;stage.classList.remove('is-dragging');}
+  stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
+  stage.addEventListener('dblclick',function(){fit();});
+  lb.addEventListener('click',function(e){
+    var btn=e.target.closest&&e.target.closest('.md-mz-btn');if(!btn)return;
+    var act=btn.getAttribute('data-mz')||btn.getAttribute('data-lb');var c=center();
+    if(act==='in')zoomAt(1.25,c.x,c.y);else if(act==='out')zoomAt(1/1.25,c.x,c.y);else if(act==='reset'){var W=stage.clientWidth,H=stage.clientHeight;s=1;tx=(W-size.w)/2;ty=(H-size.h)/2;apply();}
+    else if(act==='fit')fit();else if(act==='close')closeLightbox();
+  });
+  lb.addEventListener('keydown',function(e){
+    var c=center();
+    if(e.key==='Escape'){e.preventDefault();closeLightbox();}
+    else if(e.key==='+'||e.key==='='){e.preventDefault();zoomAt(1.25,c.x,c.y);}
+    else if(e.key==='-'){e.preventDefault();zoomAt(1/1.25,c.x,c.y);}
+    else if(e.key==='0'){e.preventDefault();fit();}
+  });
+  document.body.appendChild(lb);
+  root.setAttribute('data-lightbox','open');
+  lightbox={el:lb,fit:fit};
+  fit();lb.focus();
+  // 盡量進入真正的全螢幕；sandbox 沒開放 fullscreen 時會 reject，忽略即可
+  try{if(lb.requestFullscreen){lb.requestFullscreen().then(function(){setTimeout(fit,50);},function(){});}}catch(e){}
+}
+function closeLightbox(){
+  if(!lightbox)return;
+  var lb=lightbox.el;lightbox=null;
+  try{if(document.fullscreenElement===lb&&document.exitFullscreen)document.exitFullscreen().catch(function(){});}catch(e){}
+  lb.remove();root.removeAttribute('data-lightbox');
+}
+document.addEventListener('fullscreenchange',function(){
+  // 在真正的全螢幕中按 Esc 只會離開全螢幕，這時一併關掉 lightbox；視窗大小變了也重新貼齊
+  if(lightbox&&!document.fullscreenElement)closeLightbox();
+});
+window.addEventListener('resize',function(){if(lightbox)lightbox.fit();});
+
 // 窄視窗（側欄會以浮出面板呈現）時預設收合目錄，避免一開始就蓋住內文
 if(window.innerWidth<800&&root.getAttribute('data-toc')==='open'){root.setAttribute('data-toc','closed');var tb=document.querySelector('[data-action="toc"]');if(tb)tb.setAttribute('aria-expanded','false');}
 applyTheme(theme);

@@ -22,7 +22,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 - 針對中英混排調整的字型、字級、行高與段落節奏；文章置中、表格可超出文章寬度並水平捲動、表頭固定。
 - 深淺色主題：依 Azure DevOps 目前的主題決定初始模式，預覽內可隨時切換。
 - 側邊目錄（跟著捲動高亮目前段落、可收合）、標題錨點、文內 `[[_TOC_]]`。
-- 程式碼區塊語法上色（highlight.js）與一鍵複製；`mermaid` 圖表（```` ```mermaid ```` 或 `::: mermaid`）；GitHub 風格的 `> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]` 提示區塊；工作清單；YAML front matter。
+- 程式碼區塊語法上色（highlight.js）與一鍵複製；`mermaid` 圖表（```` ```mermaid ```` 或 `::: mermaid`，可縮放與全螢幕檢視）；GitHub 風格的 `> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]` 提示區塊；工作清單；YAML front matter。
 - 相對路徑的圖片會透過 Git REST API 讀回來內嵌，跟 Azure DevOps 內建預覽一樣能顯示 repo 內的圖片。
 - Markdown 內的 HTML 會先經 DOMPurify 消毒，再放進沒有 `allow-same-origin` 的 sandbox 中渲染。
 
