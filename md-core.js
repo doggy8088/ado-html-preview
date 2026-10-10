@@ -81,8 +81,9 @@
   }
 
   // Azure DevOps Wiki 的 ::: mermaid … ::: 語法改寫成 ```mermaid 圍籬，交給 marked 處理
+  // 只接受最多 3 個前導空白：縮 4 格以上（或 tab）是 CommonMark 的縮排程式碼區塊，裡面的標記要保留為文字
   function normalizeMermaidBlocks(md) {
-    return md.replace(/^[ \t]*:::[ \t]*mermaid[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*:::[ \t]*$/gm, (_, code) => '```mermaid\n' + code + '\n```');
+    return md.replace(/^ {0,3}:::[ \t]*mermaid[ \t]*\r?\n([\s\S]*?)\r?\n {0,3}:::[ \t]*$/gm, (_, code) => '```mermaid\n' + code + '\n```');
   }
 
   // [[_TOC_]] 若直接交給 marked 會被解析成 [[<em>TOC</em>]]，先換成 HTML 註解佔位（marked 會原樣保留），渲染後再換成目錄。
@@ -90,7 +91,7 @@
   // [[_TOC_]] 下一行直接接標題的常見寫法會整段消失；註解區塊在同一行就結束。
   const TOC_PLACEHOLDER = '<!--ado-md-toc-->';
   function normalizeToc(md) {
-    return md.replace(/^[ \t]*\[\[_TOC_\]\][ \t]*$/gm, TOC_PLACEHOLDER);
+    return md.replace(/^ {0,3}\[\[_TOC_\]\][ \t]*$/gm, TOC_PLACEHOLDER);
   }
 
   function frontMatterHtml(meta) {

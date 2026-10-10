@@ -17,7 +17,7 @@
   function bootstrap(cfg) {
     // 這段會被轉成字串注入到預覽文件，請維持 ES5 風格、不要引用外部變數
     return `(function(){
-var cfg=${JSON.stringify(cfg)};
+var cfg=${JSON.stringify(cfg).replace(/</g, '\\u003c')};
 var root=document.documentElement;
 function prefersDark(){try{return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;}catch(e){return false;}}
 var q=null;try{q=new URLSearchParams(location.search).get('theme');}catch(e){}
@@ -201,8 +201,10 @@ function openLightbox(b){
   document.body.appendChild(lb);
   root.setAttribute('data-lightbox','open');
   // 背景設為 inert：鍵盤 Tab 與螢幕閱讀器都碰不到面板以外的內容；關閉時把焦點還給開啟它的按鈕
+  // 先記下開啟面板的元素，再把背景設為 inert（inert 之後焦點會被移走，activeElement 就不是按鈕了）
+  var opener=document.activeElement;
   var app=document.querySelector('.md-app');if(app)app.inert=true;
-  lightbox={el:lb,fit:fit,opener:document.activeElement,app:app};
+  lightbox={el:lb,fit:fit,opener:opener,app:app};
   fit();var firstBtn=lb.querySelector('.md-mz-btn');if(firstBtn)firstBtn.focus();else lb.focus();
   // 盡量進入真正的全螢幕；sandbox 沒開放 fullscreen 時會 reject，忽略即可
   try{if(lb.requestFullscreen){lb.requestFullscreen().then(function(){setTimeout(fit,50);},function(){});}}catch(e){}

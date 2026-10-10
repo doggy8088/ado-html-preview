@@ -113,20 +113,24 @@
 
   const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp', ico: 'image/x-icon', bmp: 'image/bmp' };
 
-  // 回傳 { size, value }：size 是原始位元組數（給總量上限用），value 是文字或 data: URL
-  async function fetchAsset(info, repoPath, asText) {
+  // 先只抓回 blob（檢查單檔上限），轉成文字 / data: URL 是另一步，讓總量上限能在轉 base64 之前判斷
+  async function fetchAssetBlob(info, repoPath) {
     const res = await fetch(rawUrl({ ...info, path: repoPath }, 'octetStream'), { credentials: 'include' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     if (blob.size > ASSET_MAX_BYTES) throw new Error('too large');
-    if (asText) return { size: blob.size, value: await blob.text() };
+    return { blob, contentType: res.headers.get('content-type') || '' };
+  }
+
+  async function assetValue({ blob, contentType }, repoPath, asText) {
+    if (asText) return blob.text();
     // 回應的 content-type 形如 image/png; api-version=7.1，只取主型別
     const ext = (repoPath.split('.').pop() || '').toLowerCase();
-    const mime = MIME[ext] || (res.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
+    const mime = MIME[ext] || (contentType || 'application/octet-stream').split(';')[0].trim();
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let bin = '';
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return { size: blob.size, value: `data:${mime};base64,${btoa(bin)}` };
+    return `data:${mime};base64,${btoa(bin)}`;
   }
 
   // opts.totalBytes：所有資源原始位元組加總的上限（只有全螢幕模式需要，見 ASSET_TOTAL_BYTES）；
@@ -152,43 +156,46 @@
     }
     if (!jobs.length) return html;
 
-    // 先平行抓回所有資源，再依固定順序決定哪些納入總量上限：
-    // 腳本與樣式表（缺了整個網頁就壞）優先於圖片，同類之間依 DOM 順序，結果不受回應先後影響。
-    const results = await Promise.all(jobs.map(async (el) => {
+    // 處理順序：腳本與樣式表（缺了整個網頁就壞）優先於圖片，同類之間依 DOM 順序。
+    // 有總量上限（全螢幕模式）時依此順序「逐一」抓取，剩餘額度不夠就不再抓、也不轉 base64，
+    // 避免先把幾十個大圖全部下載進記憶體才發現要丟掉；沒有上限（內嵌模式）時平行抓取。
+    const items = jobs.map((el) => {
       const tag = el.tagName.toLowerCase();
-      const ref = el.getAttribute(tag === 'link' ? 'href' : 'src');
+      return { el, tag, ref: el.getAttribute(tag === 'link' ? 'href' : 'src') };
+    }).sort((a, b) => (a.tag === 'img' ? 1 : 0) - (b.tag === 'img' ? 1 : 0));
+    const budgeted = opts.totalBytes != null;
+    let remaining = budgeted ? opts.totalBytes : Infinity;
+    const load = async (r) => {
       try {
-        const repoPath = resolveRepoPath(ref, info);
-        return { el, tag, ref, asset: await fetchAsset(info, repoPath, tag !== 'img') };
+        if (budgeted && remaining <= 0) throw new Error('total asset budget exceeded');
+        const repoPath = resolveRepoPath(r.ref, info);
+        const fetched = await fetchAssetBlob(info, repoPath);
+        if (budgeted && fetched.blob.size > remaining) throw new Error('total asset budget exceeded');
+        remaining -= fetched.blob.size;
+        r.value = await assetValue(fetched, repoPath, r.tag !== 'img');
       } catch (e) {
-        return { el, tag, ref, error: String(e && e.message || e) };
+        r.error = String(e && e.message || e);
       }
-    }));
-    const order = (r) => (r.tag === 'img' ? 1 : 0);
-    let used = 0;
-    for (const r of results.slice().sort((a, b) => order(a) - order(b))) {
+    };
+    if (budgeted) { for (const r of items) await load(r); } else { await Promise.all(items.map(load)); }
+    for (const r of items) {
       const { el, tag, ref } = r;
       if (r.error) { el.setAttribute('data-inline-failed', r.error); continue; } // 抓不到就保留原樣，不影響其他資源
-      if (opts.totalBytes != null && used + r.asset.size > opts.totalBytes) {
-        el.setAttribute('data-inline-failed', 'total asset budget exceeded');
-        continue;
-      }
-      used += r.asset.size;
       if (tag === 'script') {
         const inline = doc.createElement('script');
         for (const a of el.attributes) if (a.name !== 'src') inline.setAttribute(a.name, a.value);
         inline.setAttribute('data-inlined-from', ref);
         // 內嵌後 JS 原始碼裡若含 </script 會提前結束標籤，改寫成 <\/script（字串語意不變）
-        inline.textContent = r.asset.value.replace(/<\/script/gi, '<\\/script');
+        inline.textContent = r.value.replace(/<\/script/gi, '<\\/script');
         el.replaceWith(inline);
       } else if (tag === 'link') {
         const style = doc.createElement('style');
         style.setAttribute('data-inlined-from', ref);
         if (el.media) style.setAttribute('media', el.media);
-        style.textContent = r.asset.value.replace(/<\/style/gi, '<\\/style');
+        style.textContent = r.value.replace(/<\/style/gi, '<\\/style');
         el.replaceWith(style);
       } else {
-        el.setAttribute('src', r.asset.value);
+        el.setAttribute('src', r.value);
       }
     }
 
@@ -215,30 +222,44 @@
   //   - 絕對網址：在新分頁開啟
   //   新分頁需要 sandbox 的 allow-popups-to-escape-sandbox 才不會被 sandbox 限制。
   function linkFixScript(info, nonce) {
+    // JSON.stringify 不會跳脫 <，網址裡的路徑 / 分支名若含 </script> 會提前結束這段 script；統一改寫成 \u003c
     const cfg = JSON.stringify({
       repoUrl: `${location.origin}/${info.org}/${info.project}/_git/${encodeURIComponent(info.repo)}`,
       dir: info.path.replace(/[^/]*$/, ''),
       version: info.version,
-    });
+    }).replace(/</g, '\\u003c');
     return `<script nonce="${nonce}">(function(){
 var cfg=${cfg};
-document.addEventListener('click',function(e){
-  if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
-  var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a)return;
+// 回傳連結該開啟的絕對網址；#錨點與 javascript: 等協定回傳 null（交回原本的處理）
+function resolve(a){
   var href=a.getAttribute('href')||'';
-  if(href.charAt(0)==='#'){e.preventDefault();location.hash=href;return;}
-  if(/^(javascript|mailto|tel|data|blob):/i.test(href))return;
+  if(href.charAt(0)==='#'||/^(javascript|mailto|tel|data|blob):/i.test(href))return null;
+  if(/^[a-z][a-z0-9+.-]*:/i.test(href)||href.indexOf('//')===0)return href;
+  var parts=href.split('#');
+  var path=decodeURIComponent(new URL(parts[0],'https://repo.invalid'+cfg.dir).pathname);
+  var q=new URLSearchParams({path:path});
+  if(cfg.version)q.set('version',cfg.version);
+  if(/\\.(html?|md|markdown)$/i.test(path))q.set('_a','preview');
+  return cfg.repoUrl+'?'+q.toString()+(parts[1]?'#'+parts[1]:'');
+}
+function findLink(e){return e.target&&e.target.closest?e.target.closest('a[href]'):null;}
+document.addEventListener('click',function(e){
+  if(e.defaultPrevented)return;
+  var a=findLink(e);if(!a)return;
+  var href=a.getAttribute('href')||'';
+  var modified=e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey;
+  if(href.charAt(0)==='#'){if(modified)return;e.preventDefault();location.hash=href;return;}
+  var target=resolve(a);if(target===null)return;
+  // Ctrl / ⌘ / Shift 點擊：把 href 改寫成 repo 內對應的網址後交給瀏覽器，保留原生的「在新分頁 / 新視窗開啟」行為
+  if(modified){a.setAttribute('href',target);a.setAttribute('target','_blank');a.setAttribute('rel','noopener');return;}
   e.preventDefault();
-  var target=href;
-  if(!/^[a-z][a-z0-9+.-]*:/i.test(href)&&href.indexOf('//')!==0){
-    var parts=href.split('#');
-    var path=decodeURIComponent(new URL(parts[0],'https://repo.invalid'+cfg.dir).pathname);
-    var q=new URLSearchParams({path:path});
-    if(cfg.version)q.set('version',cfg.version);
-    if(/\\.(html?|md|markdown)$/i.test(path))q.set('_a','preview');
-    target=cfg.repoUrl+'?'+q.toString()+(parts[1]?'#'+parts[1]:'');
-  }
   window.open(target,'_blank','noopener');
+},true);
+// 中鍵點擊是 auxclick（不會觸發 click），一樣先把 href 改寫成 repo 內的網址再讓瀏覽器在新分頁開啟
+document.addEventListener('auxclick',function(e){
+  if(e.button!==1)return;
+  var a=findLink(e);if(!a)return;
+  var target=resolve(a);if(target)a.setAttribute('href',target);
 },true);
 })();<\/script>`;
   }
