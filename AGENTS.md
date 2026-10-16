@@ -52,6 +52,12 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
 - macOS 上 `chrome.windows.create` 的 `type:'popup'` 搭配 `state:'maximized'` 會產生 1×33px 的視窗，務必用明確的 left/top/width/height。
 - 網址有兩種：`/{org}/{project}/_git/{repo}` 與省略專案段的 `/{org}/_git/{repo}`（專案名 = repo 名），`parseLocation()` 兩種都要支援，後者以 repo 名當專案名呼叫 API。
 - 預覽前會把 HTML 內相對路徑的 `<script src>`、`<link rel=stylesheet>`、`<img src>` 透過 Git Items API 抓回來內嵌（`inlineRelativeAssets`）；執行期 fetch 的資源與 CSS 內的 `url()` 不處理。抓資源必須用 `$format=octetStream`，`text` 會把二進位檔轉碼損毀。
+- 執行期才出現的 `<img>`（JS 用 innerHTML / `.src` 產生，靜態掃描看不到）由 `lazyImageScript` 注入預覽文件按需載入：
+  iframe 內用 MutationObserver + IntersectionObserver 發現相對路徑圖片、進入視窗附近才送 `ado-asset-request`，
+  父頁面用 `fetchImageDataUrl` 抓回 data: URL 以 `ado-asset-response` 回傳。內嵌模式的回應端是 content script；
+  全螢幕模式的父頁面 `preview.js` 沒有 ADO cookie，經 background 的 `fetch-asset` 轉給原本的 ADO 分頁（`open-preview` 時存下 `tabId` 與 `info`）。
+  請求來自不受信任的網頁腳本，所以只服務圖片副檔名（`IMAGE_EXT`），不要放寬成任意檔案。
+  作者有 `<base href>` 時不注入。Tampermonkey 版也有同樣機制（全螢幕 popup 由主頁面監聽 popup 的 message）。
 - 內嵌模式與 userscript 的 srcdoc 會繼承 Azure DevOps 的 CSP（沒有 `unsafe-eval`），需要 eval / new Function 的函式庫（如 PDF.js）只能用擴充功能的「全螢幕」模式（extension sandbox 頁的 CSP 允許 unsafe-eval）。
 - 改完程式後需到 `chrome://extensions` 重新載入擴充功能，並重新整理 Azure DevOps 頁面才會生效。
 - Markdown 預覽的 DOM 結構由 `md-shell.js` 決定、樣式只在 `md-theme.js`；改版面請先改 CSS，真的需要新元素再動 shell，並同步更新 Tampermonkey 版本（它把三個 md-*.js 內嵌在同一個檔案裡）。

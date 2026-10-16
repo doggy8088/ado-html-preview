@@ -13,6 +13,8 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 | **完整預覽 (內嵌)** | 直接取代 Preview 頁籤內的預覽區塊，高度填滿視窗。若目前在 Contents / History 等頁籤會自動切到 Preview。 |
 | **完整預覽 (全螢幕)** | 開一個與目前視窗同尺寸的獨立視窗，在擴充功能自己的 sandbox 頁面中渲染。 |
 
+預覽內由 JavaScript 動態產生的相對路徑圖片會在捲到視窗附近時按需載入。
+
 預覽內的連結也會修正：`#錨點` 正常跳轉、相對路徑（例如 `../docs/x.md`）會在新分頁開啟 repo 內對應的檔案、外部網址開新分頁。
 
 ### Markdown 預覽

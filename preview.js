@@ -22,6 +22,14 @@
       frame.contentWindow.postMessage({ type: 'render', html: data.html }, '*');
     } else if (ev.data?.type === 'title' && ev.data.title) {
       document.title = ev.data.title;
+    } else if (ev.data?.type === 'ado-asset-request' && typeof ev.data.ref === 'string') {
+      // 網頁在執行期才出現的相對路徑圖片：請 background 轉給原本的 ADO 分頁抓回 data: URL
+      const ref = ev.data.ref;
+      const reply = (r) => frame.contentWindow?.postMessage(
+        r?.ok ? { type: 'ado-asset-response', ref, value: r.value } : { type: 'ado-asset-response', ref, error: r?.error || 'unknown' }, '*');
+      if (data.tabId == null || !data.info) { reply({ ok: false, error: '缺少來源分頁資訊' }); return; }
+      chrome.runtime.sendMessage({ type: 'fetch-asset', tabId: data.tabId, info: data.info, ref }).then(reply,
+        (e) => reply({ ok: false, error: String(e?.message || e) }));
     } else if (ev.data?.type === 'ado-md-mermaid-request') {
       // Markdown 預覽要畫 mermaid 圖但 sandbox 內載不到檔案時，由這裡讀擴充功能內的 mermaid 再傳進去
       fetch(chrome.runtime.getURL('vendor/mermaid.min.js')).then((r) => r.text()).then(
