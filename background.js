@@ -17,11 +17,21 @@ async function sourceBounds(sender) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // 新視窗的 preview.js 要按需載入執行期圖片：它沒有 Azure DevOps 的 cookie，
+  // 轉給開啟視窗的那個 ADO 分頁（content script）代為抓回 data: URL
+  if (msg?.type === 'fetch-asset') {
+    chrome.tabs.sendMessage(msg.tabId, { type: 'fetch-asset', ref: msg.ref, info: msg.info }).then(
+      (reply) => sendResponse(reply || { ok: false, error: '來源分頁沒有回應' }),
+      () => sendResponse({ ok: false, error: '來源的 Azure DevOps 分頁已關閉或重新整理，無法載入圖片' }),
+    );
+    return true; // 非同步回覆
+  }
   if (!msg || msg.type !== 'open-preview') return;
   (async () => {
     try {
       const id = `preview_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      await chrome.storage.session.set({ [id]: { html: msg.html, title: msg.title } });
+      // tabId / info：之後 preview.js 要圖片時，據此請原本的 ADO 分頁用同一個檔案的位置去抓
+      await chrome.storage.session.set({ [id]: { html: msg.html, title: msg.title, info: msg.info, tabId: sender?.tab?.id } });
       const bounds = await sourceBounds(sender);
       await chrome.windows.create({
         url: chrome.runtime.getURL(`preview.html#${id}`),

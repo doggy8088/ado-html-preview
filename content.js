@@ -88,7 +88,8 @@
   // 所以 <script src="viewer.js">、<link rel="stylesheet" href="x.css">、<img src="a.png"> 全部載不到。
   // 做法：在渲染前用同一個 Git Items API 把這些同 repo 的相對資源抓回來，直接內嵌成
   // <script>…</script>、<style>…</style> 與 data: URL。
-  // 限制：只處理靜態標籤；CSS 內的 url()、腳本在執行期 fetch 的檔案（例如 PDF.js 的 worker 與 .pdf）仍無法取得。
+  // 限制：這裡只處理靜態標籤；執行期才出現的 <img> 由 lazyImageScript 按需載入（見下方）。
+  //       CSS 內的 url()、腳本在執行期 fetch 的檔案（例如 PDF.js 的 worker 與 .pdf）仍無法取得。
   const ASSET_LIMIT = 60;            // 最多內嵌幾個資源
   const ASSET_MAX_BYTES = 8 * 1024 * 1024;
   // 全螢幕模式的體積上限：整份 HTML 要放進 chrome.storage.session（配額 10 MB）。
@@ -131,6 +132,27 @@
     let bin = '';
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     return `data:${mime};base64,${btoa(bin)}`;
+  }
+
+  // ---------- 執行期圖片（按需載入） ----------
+  // 靜態 <img> 在渲染前就已內嵌，但許多網頁的圖片是 JS 執行期才用 innerHTML / .src 產生的，
+  // 渲染前的靜態掃描看不到。iframe 內會注入 lazyImageScript：發現相對路徑的 <img> 且進入視窗附近時，
+  // 向父頁面送 ado-asset-request，由這裡抓回 data: URL 後以 ado-asset-response 回傳。
+  // 只服務圖片副檔名：請求來自不受信任的網頁腳本，不能讓它藉此讀取 repo 內任意檔案。
+  const IMAGE_EXT = new RegExp(`\\.(${Object.keys(MIME).join('|')})$`, 'i');
+
+  async function fetchImageDataUrl(info, ref) {
+    const repoPath = resolveRepoPath(ref, info);
+    if (!IMAGE_EXT.test(repoPath)) throw new Error('not an image');
+    return assetValue(await fetchAssetBlob(info, repoPath), repoPath, false);
+  }
+
+  function replyAsset(target, ref, info) {
+    // sandbox iframe 的 origin 為 null，targetOrigin 只能用 '*'
+    fetchImageDataUrl(info, ref).then(
+      (value) => target.postMessage({ type: 'ado-asset-response', ref, value }, '*'),
+      (e) => target.postMessage({ type: 'ado-asset-response', ref, error: String(e?.message || e) }, '*'),
+    );
   }
 
   // opts.totalBytes：所有資源原始位元組加總的上限（只有全螢幕模式需要，見 ASSET_TOTAL_BYTES）；
@@ -265,8 +287,75 @@ document.addEventListener('auxclick',function(e){
 })();<\/script>`;
   }
 
+  // 注入到預覽 HTML 尾端的「相對路徑圖片按需載入」腳本（與 fetchImageDataUrl 成對）。
+  // 對象是執行期才出現的 <img>（含 innerHTML 塞入、事後改 src）：
+  //   - 登記 src 為相對路徑的 <img>，用 IntersectionObserver 等它進入視窗附近（400px）才向父頁面要圖，
+  //     display:none 或捲到很遠的圖不會下載；沒有 IntersectionObserver 時立刻要
+  //   - 同一個路徑只問一次（cache / waiting），失敗也記錄起來不重試，並在 img 標上 data-ado-img-failed
+  //   - 父頁面的回應端：內嵌模式是 content script，全螢幕模式是 preview.js（再經 background 轉給來源分頁）
+  // 瀏覽器會先拿相對網址對照父頁面網址發出一個無效請求（回傳 ADO 頁面而非圖片），無法避免，只是浪費一次請求。
+  function lazyImageScript(nonce) {
+    return `<script nonce="${nonce}">(function(){
+var cache=new Map();   // ref → data URL；null 代表失敗
+var waiting=new Map(); // ref → 等待回應的 <img> 陣列
+var tracked=new WeakMap(); // img → 登記時的 src 屬性值
+function isRel(r){return !!r&&!/^[a-z][a-z0-9+.-]*:/i.test(r)&&r.indexOf('//')!==0&&r.charAt(0)!=='#';}
+function apply(img,ref,v){
+  if(tracked.get(img)!==ref||img.getAttribute('src')!==ref)return; // 等待期間網頁已改掉 src
+  tracked.delete(img);
+  if(v)img.setAttribute('src',v);else img.setAttribute('data-ado-img-failed','1');
+}
+function request(img){
+  var ref=tracked.get(img);if(ref==null)return;
+  if(cache.has(ref)){apply(img,ref,cache.get(ref));return;}
+  var list=waiting.get(ref);
+  if(list){list.push(img);return;}
+  waiting.set(ref,[img]);
+  window.parent.postMessage({type:'ado-asset-request',ref:ref},'*');
+}
+var io=typeof IntersectionObserver==='function'?new IntersectionObserver(function(es){
+  es.forEach(function(e){if(e.isIntersecting){io.unobserve(e.target);request(e.target);}});
+},{rootMargin:'400px'}):null;
+function handle(img){
+  var ref=img.getAttribute('src');
+  if(!isRel(ref)){tracked.delete(img);return;}
+  if(tracked.get(img)===ref)return;
+  tracked.set(img,ref);
+  if(cache.has(ref)){apply(img,ref,cache.get(ref));return;}
+  if(io)io.observe(img);else request(img);
+}
+function scan(n){
+  if(n.nodeType!==1)return;
+  if(n.tagName==='IMG')handle(n);
+  [].forEach.call(n.querySelectorAll('img'),handle);
+}
+window.addEventListener('message',function(ev){
+  var d=ev.data;
+  if(ev.source!==window.parent||!d||d.type!=='ado-asset-response')return;
+  var list=waiting.get(d.ref)||[];waiting.delete(d.ref);
+  var v=typeof d.value==='string'?d.value:null;
+  if(!v)console.warn('[Azure DevOps HTML Preview] 無法載入圖片 '+d.ref+'：'+(d.error||'unknown'));
+  cache.set(d.ref,v);
+  list.forEach(function(img){apply(img,d.ref,v);});
+});
+new MutationObserver(function(ms){
+  ms.forEach(function(m){
+    if(m.type==='attributes'){if(m.target.tagName==='IMG')handle(m.target);}
+    else[].forEach.call(m.addedNodes,scan);
+  });
+}).observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['src']});
+scan(document.documentElement);
+})();<\/script>`;
+  }
+
   function injectBeforeBodyEnd(html, snippet) {
     return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, snippet + '</body>') : html + snippet;
+  }
+
+  // 預覽文件尾端要注入的腳本：連結修正 + 圖片按需載入。
+  // 作者自己指定了 <base href> 時，相對網址由他的 base 決定（inlineRelativeAssets 也同樣尊重），不注入圖片腳本。
+  function previewScripts(html, info, nonce) {
+    return linkFixScript(info, nonce) + (/<base\b[^>]*\bhref\s*=/i.test(html) ? '' : lazyImageScript(nonce));
   }
 
   // 確保目前在 Preview 頁籤，並回傳 ADO 自己的預覽區塊：
@@ -383,7 +472,7 @@ document.addEventListener('auxclick',function(e){
 
     // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上
     let doc = info.kind === 'md' || !nonce ? html : html.replace(/<script\b/gi, `<script nonce="${nonce}"`);
-    doc = injectBeforeBodyEnd(doc, linkFixScript(info, nonce));
+    doc = injectBeforeBodyEnd(doc, previewScripts(doc, info, nonce));
 
     const f = document.createElement('iframe');
     f.className = info.kind === 'md' ? '' : old.className;
@@ -399,9 +488,16 @@ document.addEventListener('auxclick',function(e){
     const oldDisplay = old.style.display;
     old.insertAdjacentElement('afterend', f);
     old.style.display = 'none';
-    active = { key: previewKey(info), frame: f, old, oldDisplay };
+    active = { key: previewKey(info), frame: f, old, oldDisplay, info };
     fitFrame();
   }
+
+  // 執行期圖片的回應端（內嵌模式）：只服務目前的內嵌 iframe，用它建立時的 info（之後即使換了檔案也不受影響）
+  window.addEventListener('message', (ev) => {
+    if (ev.data?.type !== 'ado-asset-request' || typeof ev.data.ref !== 'string' || !ev.source) return;
+    if (!active || ev.source !== active.frame.contentWindow) return;
+    replyAsset(ev.source, ev.data.ref, active.info);
+  });
 
   // 讓內嵌 iframe 填滿頁籤列以下的視窗高度，網頁在 iframe 內自行捲動
   // （不用內容高度撐開：vh 單位的版面會跟著 iframe 一起長，形成無限迴圈）
@@ -419,17 +515,29 @@ document.addEventListener('auxclick',function(e){
     if (!info) return;
     // 全螢幕模式跑在擴充功能的 sandbox 頁（非 srcdoc），#錨點本來就正常；
     // 仍注入連結修正腳本，讓相對路徑連結能開到對應的 Azure DevOps 檔案。sandbox CSP 允許 inline script，nonce 給空字串即可。
-    const html = injectBeforeBodyEnd(await buildDocument(info, '', { totalBytes: ASSET_TOTAL_BYTES }), linkFixScript(info, ''));
+    const built = await buildDocument(info, '', { totalBytes: ASSET_TOTAL_BYTES });
+    const html = injectBeforeBodyEnd(built, previewScripts(built, info, ''));
     const title = `${info.path.split('/').pop()} – ${LABELS[info.kind].windowSuffix}`;
     // chrome.storage.session 的配額算的是 JSON 序列化後的大小（含跳脫字元、key 與標題），
     // 所以用與 background 寫入時相同的物件來量，而不是只量 HTML 字串
-    const size = byteSize(JSON.stringify({ html, title }));
+    const size = byteSize(JSON.stringify({ html, title, info }));
     if (size > PAYLOAD_MAX_BYTES) {
       throw new Error(`預覽內容 ${(size / 1024 / 1024).toFixed(1)} MB 超過全螢幕模式的暫存上限（10 MB），請改用內嵌預覽`);
     }
-    const reply = await chrome.runtime.sendMessage({ type: 'open-preview', html, title });
+    const reply = await chrome.runtime.sendMessage({ type: 'open-preview', html, title, info });
     if (!reply?.ok) throw new Error(reply?.error || '無法開啟預覽視窗');
   }
+
+  // 執行期圖片的回應端（全螢幕模式）：新視窗的 preview.js 沒有 Azure DevOps 的 cookie，
+  // 經 background 轉到這裡，由原本的 ADO 分頁代為抓圖；info 是開啟視窗當下的檔案資訊
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg?.type !== 'fetch-asset' || typeof msg.ref !== 'string' || !msg.info) return;
+    fetchImageDataUrl(msg.info, msg.ref).then(
+      (value) => sendResponse({ ok: true, value }),
+      (e) => sendResponse({ ok: false, error: String(e?.message || e) }),
+    );
+    return true; // 非同步回覆
+  });
 
   // ---------- 按鈕 ----------
   function makeButton(label, title, action) {
