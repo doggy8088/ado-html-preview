@@ -150,7 +150,7 @@
         }
         if (body == null) body = escapeHtml(text);
         const label = language ? `<span class="md-code-lang">${escapeHtml(language)}</span>` : '<span class="md-code-lang"></span>';
-        return `<div class="md-code"><div class="md-code-head">${label}<button type="button" class="md-copy" data-label="複製" data-done="已複製">複製</button></div>` +
+        return `<div class="md-code"><div class="md-code-head">${label}<button type="button" class="md-copy" data-label="複製" data-done="已複製" aria-label="複製" title="複製"></button></div>` +
           `<pre><code class="hljs${language ? ` language-${escapeHtml(language)}` : ''}">${body}</code></pre></div>\n`;
       },
       blockquote({ tokens }) {

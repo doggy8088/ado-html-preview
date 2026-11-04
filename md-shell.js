@@ -54,7 +54,7 @@ document.addEventListener('click',function(e){
   var btn=e.target&&e.target.closest?e.target.closest('.md-copy'):null;if(!btn)return;
   var code=btn.closest('.md-code');var pre=code&&code.querySelector('pre');if(!pre)return;
   var text=pre.textContent;
-  function done(ok){btn.textContent=ok?(btn.getAttribute('data-done')||'已複製'):'無法複製';btn.classList.toggle('is-done',ok);setTimeout(function(){btn.textContent=btn.getAttribute('data-label')||'複製';btn.classList.remove('is-done');},1600);}
+  function done(ok){var msg=ok?(btn.getAttribute('data-done')||'已複製'):'無法複製';btn.setAttribute('aria-label',msg);btn.setAttribute('title',msg);btn.classList.toggle('is-done',ok);setTimeout(function(){var back=btn.getAttribute('data-label')||'複製';btn.setAttribute('aria-label',back);btn.setAttribute('title',back);btn.classList.remove('is-done');},1600);}
   function fallback(){try{var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:0;left:0;opacity:0';document.body.appendChild(ta);ta.select();var ok=document.execCommand('copy');ta.remove();done(ok);}catch(err){done(false);}}
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(function(){done(true);},fallback);}else{fallback();}
 });
@@ -223,10 +223,263 @@ document.addEventListener('fullscreenchange',function(){
 });
 window.addEventListener('resize',function(){if(lightbox)lightbox.fit();});
 
+${adoEnhanceAll.toString()}
+adoEnhanceAll();
 // 窄視窗（側欄會以浮出面板呈現）時預設收合目錄，避免一開始就蓋住內文
 if(window.innerWidth<800&&root.getAttribute('data-toc')==='open'){root.setAttribute('data-toc','closed');var tb=document.querySelector('[data-action="toc"]');if(tb)tb.setAttribute('aria-expanded','false');}
 applyTheme(theme);
 })();`;
+  }
+
+  // 自適應版面：依文件結構裝飾標題、清單、表格並加上互動控制（不動到文字內容順序）。
+  // 以 toString() 注入 bootstrap 模板，避免 template literal 吃掉正則的反斜線。
+  function adoEnhanceAll() {
+// ===== 自適應版面：依文件結構裝飾標題、清單、表格並加上互動控制（不動到文字內容順序） =====
+function fmtNum(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function isCjkChar(ch){var c=ch.charCodeAt(0);return (c>=0x4E00&&c<=0x9FFF)||(c>=0x3040&&c<=0x30FF)||(c>=0xAC00&&c<=0xD7AF);}
+var ICON_WORDS=[['summary',['摘要','結論','重點','總結','summary','overview','tl;dr','結語']],['info',['文件資訊','文件用途','關於','about','metadata']],['todo',['待查','待辦','待確認','缺口','下一步','todo','next step','action','known gap','清單']],['risk',['風險','注意','限制','陷阱','risk','warning','caveat','pitfall']],['tip',['建議','技巧','最佳實務','tip','best practice','recommend']],['perf',['效能','調校','速度','瓶頸','performance','tuning','latency']],['trouble',['疑難','排錯','排解','錯誤','診斷','troubleshoot','debug','faq','問題']],['schedule',['時程','排程','週','路線','計畫','規劃','schedule','timeline','roadmap','plan']],['video',['影片','video','youtube','頻道']],['people',['角色','權限','帳號','組織','role','permission','team']],['security',['資安','安全','security','授權','license']],['deploy',['上線','部署','安裝','環境','deploy','install','setup','rollback']],['test',['測試','驗收','驗證','test','qa']],['tool',['工具','外掛','tool','plugin','utility']],['arch',['架構','流程','設計','整合','architecture','flow','design','integration']],['code',['api','程式','開發','built-in','trigger','sdk','code','語法']],['history',['歷史','版本','生命週期','支援','history','version','lifecycle']],['goal',['背景','目標','範圍','需求','background','goal','scope','requirement']],['refs',['參考','來源','資源','文件','手冊','書','學習','閱讀順序','reference','resource','source','docs','learning']],['appendix',['附錄','附註','附件','appendix','note']]];
+var ICON_EMOJI={'summary':'📌','info':'📄','todo':'☑️','risk':'⚠️','tip':'💡','perf':'⚡','trouble':'🩺','schedule':'🗓️','video':'🎬','people':'👥','security':'🔒','deploy':'🚀','test':'🧪','tool':'🧰','arch':'🧭','code':'🧩','history':'🕰️','goal':'🎯','refs':'📚','appendix':'📎'};
+function iconFor(text){var lower=text.toLowerCase();for(var i=0;i<ICON_WORDS.length;i++){for(var j=0;j<ICON_WORDS[i][1].length;j++){if(lower.indexOf(ICON_WORDS[i][1][j])!==-1)return ICON_WORDS[i][0];}}return null;}
+function firstTextNode(el){var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null);var n;while((n=w.nextNode())){if(n.parentElement&&n.parentElement.closest&&n.parentElement.closest('.md-anchor'))continue;if(n.data.trim())return n;}return null;}
+function itemRoot(li){return (li.children.length===1&&li.firstElementChild.tagName==='P')?li.firstElementChild:li;}
+function decorateHeadings(art){
+  [].slice.call(art.querySelectorAll('h1,h2,h3,h4')).forEach(function(h){
+    var tn=firstTextNode(h);if(!tn)return;
+    // 章節編號徽章：「2.1 標題」的「2.1」
+    var m=tn.data.match(/^\s*((?:\d+\.)+\d+)\s+/);
+    if(m){
+      var num=document.createElement('span');num.className='md-h-num';num.textContent=m[1];
+      tn.data=tn.data.slice(m[0].length);
+      h.insertBefore(num,tn);
+    }
+    // H1 主副標拆行：「主標 — 副標」
+    if(h.tagName==='H1'){
+      var t=firstTextNode(h);
+      if(t&&/^[^<>\n]*\s+[—–]\s+\S/.test(t.data)){
+        var parts=t.data.split(/\s+[—–]\s+/);
+        var a=document.createElement('span');a.className='md-title';a.textContent=parts.shift();
+        var b=document.createElement('span');b.className='md-subtitle';b.textContent=parts.join(' — ');
+        h.insertBefore(a,t);h.insertBefore(b,t);h.removeChild(t);
+      }
+    }
+    // H2 主題 Emoji 圖示（標題已有 emoji 則不加；以 span 呈現，不動到 h2 的既有裝飾）
+    if(h.tagName==='H2'){
+      var txt=h.textContent||'';
+      if(!/\p{Extended_Pictographic}/u.test(txt)){
+        var icon=iconFor(txt);
+        if(icon&&ICON_EMOJI[icon]){
+          var span=document.createElement('span');
+          span.className='md-h-icon';span.setAttribute('aria-hidden','true');span.textContent=ICON_EMOJI[icon];
+          h.insertBefore(span,h.querySelector('.md-anchor')?h.querySelector('.md-anchor').nextSibling:h.firstChild);
+        }
+      }
+    }
+  });
+}
+function addReadingTime(art){
+  var src=art.textContent||'';var cjk=0;
+  for(var i=0;i<src.length;i++){if(isCjkChar(src.charAt(i)))cjk++;}
+  var minutes=Math.max(1,Math.round(cjk>src.length*0.15?cjk/500:src.length/1400));
+  var meta=document.createElement('div');meta.className='md-doc-meta';
+  meta.textContent='⏱ 約 '+minutes+' 分鐘閱讀 · '+fmtNum(src.length)+' 字';
+  var h1=art.querySelector('h1');
+  if(h1&&h1.nextSibling)h1.parentNode.insertBefore(meta,h1.nextSibling);
+  else art.insertBefore(meta,art.firstChild);
+}
+function classifyLists(art){
+  [].slice.call(art.children).forEach(function(list){
+    if(list.tagName!=='UL'&&list.tagName!=='OL')return;
+    var items=[].slice.call(list.children);
+    if(items.length<2||items.length>8)return;
+    if(list.querySelector('ul,ol,input,pre,blockquote,table'))return;
+    // 粗體開頭的長編號重點 → 編號面板（先於屬性表判定，避免長項目被誤吞）
+    if(list.tagName==='OL'&&items.length>=3){
+      var findings=items.every(function(li){var f=itemRoot(li).firstElementChild;return f&&f.tagName==='STRONG'&&(li.textContent||'').trim().length>40;});
+      if(findings){list.classList.add('md-findings');return;}
+    }
+    // 「標籤：內容」清單（值偏短）→ 屬性表
+    var kv=items.every(function(li){var s=(li.textContent||'').trim();return s.length<=80&&/^[^：:\n]{1,24}[：:]\s*\S/.test(s);});
+    if(kv){
+      items.forEach(function(li){
+        var root=itemRoot(li);
+        // 粗體鍵：**標籤**：內容 → <strong> 直接當鍵
+        var strong=root.firstElementChild;
+        if(strong&&strong.tagName==='STRONG'&&strong.nextSibling&&strong.nextSibling.nodeType===3&&/^[：:]/.test(strong.nextSibling.data)){
+          strong.nextSibling.data=strong.nextSibling.data.replace(/^[：:]\s*/,'');
+          strong.classList.add('md-kv-key');
+          li.classList.add('md-kv-item');
+          return;
+        }
+        var t=firstTextNode(root);if(!t)return;
+        var m=t.data.match(/^(\s*[^：:\n]{1,24})[：:](\s*)/);
+        if(!m)return;
+        var key=document.createElement('span');key.className='md-kv-key';
+        key.textContent=m[1].trim();
+        t.data=t.data.slice(m[0].length);
+        root.insertBefore(key,root.firstChild);
+        li.classList.add('md-kv-item');
+      });
+      list.classList.add('md-kv');
+      return;
+    }
+    var flat=items.every(function(li){var s=(li.textContent||'').trim();return s.length>0&&s.length<=120&&!li.querySelector('ul,ol,input,pre,blockquote,img');});
+    if(flat&&items.length>=3){
+      list.classList.add('md-cards');
+      if(list.tagName==='OL')list.classList.add('md-steps');
+      return;
+    }
+  });
+}
+function badgeStatusCells(wrap){
+  var map={'✅':'ok','⚠️':'warn','❌':'bad','※':'info'};
+  [].slice.call(wrap.querySelectorAll('td')).forEach(function(td){
+    var t=firstTextNode(td);if(!t)return;
+    var s=t.data.trim();var ch=s.charAt(0)==='⚠'?'⚠️':s.charAt(0);
+    if(!map[ch])return;
+    var b=document.createElement('span');b.className='md-badge '+map[ch];b.textContent=ch;
+    var idx=t.data.indexOf(ch);
+    var rest=t.data.slice(0,idx)+t.data.slice(idx+ch.length);
+    t.data=rest.replace(/^\s+/,'');
+    td.insertBefore(b,td.firstChild);
+  });
+}
+function setupTables(art){
+  [].slice.call(art.querySelectorAll('.md-table-wrap')).forEach(function(wrap){
+    var table=wrap.querySelector(':scope > table');if(!table||!table.tHead||!table.tBodies[0])return;
+    var head=table.tHead.rows[0];var body=table.tBodies[0];
+    var rows=[].slice.call(body.rows);if(!rows.length)return;
+    var cells=[].slice.call(head.cells);
+    var headers=cells.map(function(th){return (th.textContent||'').replace(/\s+/g,' ').trim();});
+    var simple=table.tHead.rows.length===1&&table.querySelectorAll('tbody').length===1&&!table.querySelector('[colspan],[rowspan],table')&&rows.every(function(r){return r.cells.length===cells.length;});
+    var wide=cells.length>=6;
+    // 寬表：交給 .md-table-wrap.is-wide 的既有樣式（卡片內水平捲動、放棄 sticky 表頭）
+    if(wide)wrap.classList.add('is-wide');
+    if(wide)art.classList.add('md-wide');
+    if(simple&&cells.length<=4&&rows.some(function(r){return [].slice.call(r.cells).some(function(td){return (td.textContent||'').trim().length>=80;});}))wrap.classList.add('is-stackable');
+    if(!simple)return;
+    if(rows.length>=5)wrap.classList.add('is-sortable');
+    if(rows.length>=12)wrap.classList.add('is-filterable');
+    if(cells.length>=3)wrap.classList.add('is-resizable');
+    if(rows.length>=8||cells.length>=5)wrap.classList.add('is-dense');
+    if(simple)rows.forEach(function(r,i){[].slice.call(r.cells).forEach(function(td,ci){if(headers[ci])td.setAttribute('data-label',headers[ci]);});});
+    badgeStatusCells(wrap);
+    // 工具列：篩選、列數、捲動提示、還原
+    var tools=document.createElement('div');tools.className='md-table-tools';
+    var label=headers.join(' / ');
+    wrap.parentNode.insertBefore(tools,wrap);
+    var live=document.createElement('span');live.className='md-visually-hidden';live.setAttribute('aria-live','polite');tools.appendChild(live);
+    function announce(msg){live.textContent=msg;}
+    var input=null,count=null,hint=null,reset=null;
+    if(wrap.classList.contains('is-filterable')){
+      input=document.createElement('input');input.type='search';input.className='md-table-filter';
+      input.placeholder='篩選表格內容…';input.setAttribute('aria-label','篩選表格內容… — '+label);
+      count=document.createElement('span');count.className='md-table-count';count.textContent='共 '+rows.length+' 列';
+      tools.appendChild(input);tools.appendChild(count);
+      input.addEventListener('input',function(){
+        var q=input.value.trim().toLowerCase();var shown=0;
+        rows.forEach(function(r){
+          var hit=!q||(r.textContent||'').toLowerCase().indexOf(q)!==-1;
+          r.hidden=!hit;if(hit)shown++;
+        });
+        count.textContent=shown===rows.length?'共 '+rows.length+' 列':'顯示 '+shown+' / '+rows.length+' 列';
+      });
+    }
+    function freeze(){if(wrap.classList.contains('is-resized'))return;
+      var widths=cells.map(function(c){return c.getBoundingClientRect().width;});
+      table.style.width=table.getBoundingClientRect().width+'px';
+      cells.forEach(function(c,i){c.style.width=widths[i]+'px';});
+      wrap.classList.add('is-resized');}
+    function resetWidths(){wrap.classList.remove('is-resized');table.style.width='';cells.forEach(function(c){c.style.width='';});update();}
+    if(wrap.classList.contains('is-resizable')){
+      cells.slice(0,-1).forEach(function(th,i){
+        var grip=document.createElement('span');grip.className='md-col-resize';grip.tabIndex=0;
+        grip.setAttribute('role','separator');grip.setAttribute('aria-orientation','vertical');
+        grip.setAttribute('aria-label','拖曳調整欄寬（雙擊還原） — '+(headers[i]||i+1));
+        grip.title='拖曳調整欄寬（雙擊還原）';
+        th.appendChild(grip);
+        grip.addEventListener('click',function(e){e.stopPropagation();});
+        grip.addEventListener('pointerdown',function(e){
+          if(e.button!==0)return;e.preventDefault();freeze();
+          var startX=e.clientX,startW=th.offsetWidth;
+          grip.setPointerCapture(e.pointerId);grip.classList.add('is-active');
+          function move(ev){var w=Math.max(64,startW+(ev.clientX-startX));th.style.width=w+'px';update();}
+          function up(){grip.classList.remove('is-active');grip.removeEventListener('pointermove',move);grip.removeEventListener('pointerup',up);grip.removeEventListener('pointercancel',up);}
+          grip.addEventListener('pointermove',move);grip.addEventListener('pointerup',up);grip.addEventListener('pointercancel',up);
+        });
+        grip.addEventListener('keydown',function(e){
+          var step=e.key==='ArrowRight'?24:(e.key==='ArrowLeft'?-24:0);if(!step)return;
+          e.preventDefault();freeze();var w=Math.max(64,th.offsetWidth+step);th.style.width=w+'px';update();
+        });
+        grip.addEventListener('dblclick',function(e){e.preventDefault();resetWidths();});
+      });
+    }
+    if(wrap.classList.contains('is-sortable')){
+      cells.forEach(function(th,col){
+        if(th.querySelector('a,button,input'))return;
+        var btn=document.createElement('button');btn.type='button';btn.className='md-th-sort';btn.title='排序';
+        while(th.firstChild)btn.appendChild(th.firstChild);
+        th.appendChild(btn);
+        btn.addEventListener('click',function(){
+          var cur=th.getAttribute('aria-sort');
+          var dir=cur==='ascending'?-1:(cur==='descending'?0:1);
+          cells.forEach(function(h){h.removeAttribute('aria-sort');});
+          if(dir>0)th.setAttribute('aria-sort','ascending');
+          else if(dir<0)th.setAttribute('aria-sort','descending');
+          sortBy(col,dir);
+          announce(dir>0?'已依 '+headers[col]+' 遞增排序':(dir<0?'已依 '+headers[col]+' 遞減排序':'已還原原始順序'));
+        });
+      });
+    }
+    function sortBy(col,dir){
+      var order=rows.map(function(r,i){return i;});
+      if(dir){
+        var keys=rows.map(function(r){return r.cells[col]?(r.cells[col].textContent||'').trim():'';});
+        var numeric=keys.filter(Boolean).every(function(k){return /^[~約≈]?-?[\d,.]+%?$/.test(k.replace(/,/g,''));});
+        order.sort(function(a,b){
+          var x=keys[a],y=keys[b];
+          if(!x||!y)return x?-1:(y?1:a-b);
+          var c=numeric?parseFloat(x.replace(/[^\d.\-]/g,''))-parseFloat(y.replace(/[^\d.\-]/g,'')):x.localeCompare(y,'zh-Hant');
+          return (c||a-b)*(dir===1?1:-1);
+        });
+      }
+      var frag=document.createDocumentFragment();
+      order.forEach(function(i){frag.appendChild(rows[i]);});
+      body.appendChild(frag);
+    }
+    if(wrap.classList.contains('is-sortable')||wrap.classList.contains('is-resizable')){
+      reset=document.createElement('button');reset.type='button';reset.className='md-table-reset';
+      reset.textContent='還原順序與欄寬';reset.title='還原順序與欄寬';
+      tools.appendChild(reset);
+      reset.addEventListener('click',function(){
+        if(wrap.classList.contains('is-sortable')){sortBy(0,0);cells.forEach(function(h){h.removeAttribute('aria-sort');});}
+        if(wrap.classList.contains('is-resizable'))resetWidths();
+        announce('已還原原始順序與欄寬');
+      });
+    }
+    // 捲動提示與可鍵盤捲動的區域（只有寬表的卡片會自己水平捲動）
+    function update(){
+      if(!wrap.classList.contains('is-wide'))return;
+      var sx=wrap.scrollWidth>wrap.clientWidth+1;
+      if(sx){
+        wrap.setAttribute('tabindex','0');wrap.setAttribute('role','region');wrap.setAttribute('aria-label',label||'表格');
+      }else{wrap.removeAttribute('tabindex');wrap.removeAttribute('role');wrap.removeAttribute('aria-label');}
+      if(sx&&!hint){hint=document.createElement('span');hint.className='md-scroll-hint';hint.textContent='← 可左右捲動 →';tools.appendChild(hint);}
+      if(hint)hint.hidden=!sx;
+    }
+    update();
+    if(window.ResizeObserver)new ResizeObserver(update).observe(wrap);
+  });
+}
+function enhanceDocument(){
+  var art=document.querySelector('.md-content');if(!art||art.getAttribute('data-enhanced'))return;
+  art.setAttribute('data-enhanced','1');
+  decorateHeadings(art);
+  addReadingTime(art);
+  classifyLists(art);
+  setupTables(art);
+}
+enhanceDocument();
+
   }
 
   /**

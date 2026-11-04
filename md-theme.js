@@ -78,6 +78,8 @@
   --accent-fg: #ffffff;
   --success: #107c10;
   --success-fg: #ffffff;
+  --warning: #9d5d00;
+  --danger: #d13438;
 
   --shadow-2: 0 1.6px 3.6px rgba(0,0,0,.132), 0 .3px .9px rgba(0,0,0,.108);
   --shadow-8: 0 3.2px 7.2px rgba(0,0,0,.132), 0 .6px 1.8px rgba(0,0,0,.108);
@@ -144,6 +146,8 @@ html[data-theme="dark"] {
   --accent-fg: #000000;
   --success: #5db564;
   --success-fg: #000000;
+  --warning: #f7c948;
+  --danger: #f1707b;
 
   --shadow-2: 0 1.6px 3.6px rgba(0,0,0,.4), 0 .3px .9px rgba(0,0,0,.35);
   --shadow-8: 0 3.2px 7.2px rgba(0,0,0,.45), 0 .6px 1.8px rgba(0,0,0,.4);
@@ -834,24 +838,30 @@ html[data-toc="none"] .md-toc { display: none; }
 }
 .md-code-lang:empty::before { content: "text"; color: var(--fg-faint); }
 
-/* Fluent DefaultButton，縮小尺寸 */
+/* 複製圖示：預設自動隱藏，滑過程式碼卡片（或鍵盤聚焦）才淡入；觸控裝置常駐 */
 .md-copy {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 26px;
   height: 26px;
-  padding: 0 10px;
+  padding: 0;
   margin: 0;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
   color: var(--fg-2);
   background: var(--bg-surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.md-code:hover .md-copy,
+.md-code:focus-within .md-copy,
+.md-copy:focus-visible { opacity: 1; }
+@media (hover: none) {
+  /* 觸控裝置沒有 hover：保持可見以免按不到 */
+  .md-copy { opacity: .6; }
 }
 .md-copy::before {
   content: "";
@@ -1199,6 +1209,306 @@ html[data-theme="dark"] .md-mermaid .edgeLabel rect, html[data-theme="dark"] .md
   .md-alert::before, .md-alert::after { left: 15px; }
 }
 
+/* ---------- 自適應版面（md-shell 的 enhanceDocument 依文件結構加上） ---------- */
+/* 文件分類：寬表文件放寬內容欄；逐字稿／無標題長文用窄閱讀欄；參考文件緊湊 */
+.md-content.md-wide { --content-w: 1320px; }
+.md-content.md-prose {
+  max-width: min(var(--content-w), 760px);
+  font-size: 15.5px;
+  line-height: 2;
+  letter-spacing: .015em;
+}
+.md-content.md-prose > p { margin-bottom: 1.5em; }
+.md-content.md-reference { font-size: 15px; }
+.md-content.is-cjk { line-height: 1.95; letter-spacing: .02em; }
+
+/* 標題下的閱讀時間 */
+.md-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -8px 0 30px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* H1 主副標拆行 */
+.md-content h1 .md-subtitle {
+  display: block;
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--fg-muted);
+  letter-spacing: 0;
+}
+
+/* 章節編號徽章 */
+.md-h-num {
+  display: inline-block;
+  margin: 0 10px 0 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: .62em;
+  font-weight: 700;
+  line-height: 1.8;
+  vertical-align: 3px;
+  letter-spacing: .04em;
+  font-variant-numeric: tabular-nums;
+}
+h3 .md-h-num, h4 .md-h-num { vertical-align: 2px; }
+
+/* H2 主題 Emoji 圖示 */
+.md-h-icon { margin-right: 8px; font-size: .85em; }
+
+/* 狀態徽章（✅ ⚠️ ❌ ※ 開頭的儲存格） */
+.md-badge {
+  display: inline-block;
+  margin: 0 6px 0 0;
+  padding: 1px 9px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.md-badge.ok { color: var(--success); }
+.md-badge.warn { color: var(--warning); }
+.md-badge.bad { color: var(--danger); }
+.md-badge.info { color: var(--fg-muted); }
+
+/* 屬性表（每項都是「標籤：內容」） */
+ul.md-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 28px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+ul.md-kv > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-2);
+  font-size: 14.5px;
+}
+ul.md-kv > li > .md-kv-key,
+ul.md-kv > li > strong.md-kv-key {
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 短清單卡片；編號清單保留步驟圓牌 */
+ul.md-cards, ol.md-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+  counter-reset: md-step;
+}
+ul.md-cards > li, ol.md-cards > li {
+  margin: 0;
+  padding: 16px 18px;
+  background: var(--bg-surface);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+ul.md-cards > li:hover, ol.md-cards > li:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+ol.md-cards.md-steps > li {
+  position: relative;
+  padding-top: 44px;
+  counter-increment: md-step;
+}
+ol.md-cards.md-steps > li::before {
+  content: counter(md-step);
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg-surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 粗體開頭的長編號重點：編號面板 */
+ol.md-findings {
+  list-style: none;
+  counter-reset: md-find;
+  margin: 0 0 24px;
+  padding: 0;
+}
+ol.md-findings > li {
+  position: relative;
+  margin: 0 0 12px;
+  padding: 16px 18px 16px 58px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  counter-increment: md-find;
+}
+ol.md-findings > li::before {
+  content: counter(md-find);
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表格工具列：篩選、列數、捲動提示、還原 */
+.md-table-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+.md-table-filter {
+  flex: 0 1 220px;
+  min-width: 0;
+  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--fg);
+  font: inherit;
+}
+.md-table-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.md-table-count { font-variant-numeric: tabular-nums; }
+.md-scroll-hint { margin-left: auto; white-space: nowrap; color: var(--fg-faint); }
+.md-scroll-hint[hidden] { display: none; }
+.md-table-reset {
+  appearance: none;
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.md-table-reset:hover { background: var(--bg-hover); border-color: var(--fg-faint); }
+.md-table-reset:active { background: var(--bg-pressed); }
+.md-table-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.md-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 欄名排序鈕 */
+.md-th-sort {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.md-th-sort::after { content: "↕"; font-size: 11px; opacity: .35; }
+th[aria-sort="ascending"] .md-th-sort::after { content: "▲"; opacity: .9; color: var(--accent); }
+th[aria-sort="descending"] .md-th-sort::after { content: "▼"; opacity: .9; color: var(--accent); }
+.md-th-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* 欄寬調整握把（拖曳或方向鍵，雙擊還原） */
+.md-col-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.md-col-resize::after {
+  content: "";
+  position: absolute;
+  inset: 25% 3px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+}
+.md-col-resize:is(:hover, :focus-visible, .is-active)::after { opacity: .8; }
+.md-col-resize:focus-visible { outline: none; }
+.md-table-wrap.is-resized > table { table-layout: fixed; }
+.md-table-wrap.is-resized :is(th, td) { overflow-wrap: anywhere; }
+
+/* 密集資料表：更緊湊的列高 */
+.md-table-wrap.is-dense :is(th, td) { padding: 6px 12px; }
+
+/* 窄容器：長文字表格（≤ 4 欄）變成堆疊卡片，欄名顯示在每格上方 */
+.md-table-wrap.is-stackable { container-type: inline-size; }
+@container (width < 34rem) {
+  .md-table-wrap.is-stackable > table,
+  .md-table-wrap.is-stackable > table > tbody,
+  .md-table-wrap.is-stackable tr,
+  .md-table-wrap.is-stackable td { display: block; width: auto; min-width: 0; }
+  .md-table-wrap.is-stackable thead { display: none; }
+  .md-table-wrap.is-stackable tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .md-table-wrap.is-stackable tr[hidden] { display: none; }
+  .md-table-wrap.is-stackable tr:last-child { border-bottom: 0; }
+  .md-table-wrap.is-stackable td { padding: 4px 16px; border: 0; white-space: normal; }
+  .md-table-wrap.is-stackable td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--fg-muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+/* 窄螢幕：屬性表與卡片改單欄 */
+@media (max-width: 760px) {
+  ul.md-kv { grid-template-columns: minmax(0, 1fr); }
+  ul.md-cards, ol.md-cards { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ---------- 動態效果偏好 ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -1216,6 +1526,8 @@ html[data-theme="dark"] .md-mermaid .edgeLabel rect, html[data-theme="dark"] .md
   .md-content thead th { position: static; }
   .md-code { box-shadow: none; break-inside: avoid; }
   .md-copy { display: none; }
+  .md-table-tools, .md-col-resize, .md-th-sort::after { display: none !important; }
+  tr[hidden] { display: table-row; }
   .md-anchor { display: none; }
   .md-mz-tools, .md-lightbox { display: none; }
 }
