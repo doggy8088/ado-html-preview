@@ -16,8 +16,13 @@
 //      交給 Chrome 內建的 PDF 檢視器算繪（不引入 PDF.js：它需要 eval，內嵌模式的 CSP 跑不起來）。
 //      PDF 的 iframe 刻意「不加 sandbox」：實測 sandbox（無 allow-same-origin）會讓內建檢視器載不起來，
 //      而 PDF 由 PDFium 算繪、不執行 PDF 內嵌的 JavaScript、也不是 HTML（見「PDF」段落的完整說明）。
+//   Excel（.xlsx）：
+//   1. Excel 預覽 (內嵌) / 2. Excel 預覽 (全螢幕)：
+//      以 octetStream 取回原始位元組，經 SheetJS（vendor/xlsx.full.min.js）解析、
+//      xlsx-core.js（AdoXlsx）產出主題化的唯讀表格文件（多工作表頁籤、樣式、合併儲存格、凍結窗格）；
+//      內嵌與 PDF 共用自製「Preview」頁籤機制，全螢幕走 sandbox 頁（輸出就是 HTML 文件）。
 //
-// 開啟支援的檔案（.html / .htm / .md / .markdown / .pdf）時，內嵌預覽會自動啟用、不必按按鈕（見 maybeAutoPreview）；
+// 開啟支援的檔案（.html / .htm / .md / .markdown / .pdf / .xlsx）時，內嵌預覽會自動啟用、不必按按鈕（見 maybeAutoPreview）；
 // 兩顆按鈕保留，用來重開預覽或改用全螢幕。
 // 預覽內點擊指向 repo 文件的連結會「就地換頁」（不開新分頁），瀏覽器上一頁 / 前進逐頁可用，像真的在逛網站；
 // 每份文件左上角另有「← 上一頁」小圓鈕（見「就地換頁」段落）。
@@ -41,11 +46,16 @@
       window: 'PDF 預覽 (全螢幕)', windowTitle: '在新視窗用 Chrome 內建的 PDF 檢視器全螢幕預覽此 PDF',
       windowSuffix: 'PDF 預覽',
     },
+    xlsx: {
+      inline: 'Excel 預覽 (內嵌)', inlineTitle: '在 Preview 頁籤以主題化的唯讀表格顯示此 Excel 工作簿',
+      window: 'Excel 預覽 (全螢幕)', windowTitle: '在新視窗以主題化的唯讀表格全螢幕預覽此 Excel 工作簿',
+      windowSuffix: 'Excel 預覽',
+    },
   };
   const MERMAID_URL = chrome.runtime.getURL('vendor/mermaid.min.js');
 
-  // 檔案類型：HTML（.html / .htm）、Markdown（.md / .markdown）與 PDF（.pdf）；其他檔案不支援預覽
-  const kindOf = (path) => (/\.html?$/i.test(path) ? 'html' : /\.(md|markdown)$/i.test(path) ? 'md' : /\.pdf$/i.test(path) ? 'pdf' : null);
+  // 檔案類型：HTML（.html / .htm）、Markdown（.md / .markdown）、PDF（.pdf）與 Excel（.xlsx）；其他檔案不支援預覽
+  const kindOf = (path) => (/\.html?$/i.test(path) ? 'html' : /\.(md|markdown)$/i.test(path) ? 'md' : /\.pdf$/i.test(path) ? 'pdf' : /\.xlsx$/i.test(path) ? 'xlsx' : null);
 
   function parseLocation() {
     // 兩種網址：
@@ -114,13 +124,25 @@
   //     也因為如此，PDF 的 iframe 不加 sandbox：實測 sandbox（無 allow-same-origin）時內建檢視器載不起來
   //     （blob URL 與直接 URL 皆然）。這是 PDF 專屬的例外，HTML / Markdown 的 sandbox 規則完全不變。
   //   - 一律以 octetStream 取回（text 會把二進位轉碼損毀）；blob URL 建立後不 revoke（與 navUrls 同政策）。
-  async function fetchPdfBlob(info) {
+  async function fetchBinary(info) {
     const res = await fetch(rawUrl(info, 'octetStream'), { credentials: 'include' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.blob();
   }
 
   const pdfBlobUrl = (blob) => URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+
+  // xlsx（.xlsx）：經 xlsx-core.js 的 AdoXlsx 產出主題化的唯讀預覽文件（HTML）。
+  // 與 Markdown 一樣是完整 HTML 文件：內嵌用 sandbox iframe、全螢幕走 sandbox 頁，兩者共用同一份輸出。
+  async function buildXlsxDocument(info, nonce) {
+    const buf = await (await fetchBinary(info)).arrayBuffer();
+    return AdoXlsx.buildDocument({
+      arrayBuffer: buf,
+      fileName: info.path.split('/').pop(),
+      theme: adoTheme(),
+      nonce,
+    });
+  }
 
   // ---------- 相對路徑資源內嵌 ----------
   // sandbox iframe 裡的相對網址會解析到 Azure DevOps 的頁面網址而不是 repo 檔案，
@@ -438,6 +460,8 @@ scan(document.documentElement);
   // 組出最終放入 sandbox 的完整預覽文件：HTML 檔補上 CSP nonce、注入連結修正與圖片按需載入腳本。
   // nav / hash：就地換頁時的頁次與錨點（第一頁 nav=0、無錨點）。
   function finalizeDoc(html, info, nonce, nav = 0, hash = '') {
+    // xlsx 的唯讀文件在 buildXlsxDocument 已備妥帶 nonce 的 bootstrap，也沒有需要修正的連結 / 圖片
+    if (info.kind === 'xlsx') return html;
     // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上
     const doc = info.kind === 'md' || !nonce ? html : html.replace(/<script\b/gi, `<script nonce="${nonce}"`);
     return injectBeforeBodyEnd(doc, previewScripts(doc, info, nonce, nav, hash));
@@ -468,7 +492,7 @@ scan(document.documentElement);
 
   // 確保目前在 Preview 頁籤，並回傳 ADO 自己的預覽區塊：
   //   HTML → ADO 的 srcdoc iframe；Markdown → ADO 自己渲染的 .markdown-preview-container。
-  //   PDF 不走這裡（ADO 的 PDF 檔案頁沒有 Preview 頁籤，預覽掛自製的 Preview 頁籤，見 renderPdfInline）。
+  //   PDF 不走這裡（ADO 的 PDF 檔案頁沒有 Preview 頁籤，預覽掛自製的 Preview 頁籤，見 renderDocInline）。
   // 不含我們自己建立的 iframe（呼叫前會先 clearInlinePreview）。
   async function ensurePreviewTarget(kind) {
     // Markdown：優先找 .markdown-preview-container，找不到才退回較外層的 .files-hub-content-preview
@@ -489,51 +513,51 @@ scan(document.documentElement);
     return frame;
   }
 
-  // ---------- PDF 的內嵌預覽：自製「Preview」頁籤 ----------
-  // ADO 的 PDF 檔案頁沒有 Preview 頁籤（實測只有 Contents / History / Compare / Blame）。
+  // ---------- PDF / Excel 的內嵌預覽：自製「Preview」頁籤 ----------
+  // ADO 的 PDF / xlsx 檔案頁沒有 Preview 頁籤（實測只有 Contents / History / Compare / Blame）。
   // 預覽若寄生在 Contents 下、把 .page-content 整塊隱藏，其他頁籤會切不動（它們的內容都在被隱藏的區塊裡）；
   // 所以在 .bolt-tabbar-tabs 補一個我們自己的「Preview」頁籤：預覽只在這個頁籤顯示，
   // 切到 ADO 原生頁籤就顯示各自的內容（.page-content 節點由 React 保留、內容依頁籤替換——實測確認）。
-  const PDF_TAB_ATTR = 'data-ado-pdf-tab';
+  const DOC_TAB_ATTR = 'data-ado-doc-tab';
 
-  function ensurePdfPreviewTab() {
+  function ensureDocPreviewTab() {
     const bar = document.querySelector('.bolt-tabbar .bolt-tabbar-tabs') || document.querySelector('.bolt-tabbar');
     if (!bar) return null;
-    let tab = document.querySelector(`.bolt-tabbar [${PDF_TAB_ATTR}]`);
+    let tab = document.querySelector(`.bolt-tabbar [${DOC_TAB_ATTR}]`);
     if (tab) return tab;
     const base = bar.querySelector('.bolt-tab');
     if (!base) return null;
     // 複製 ADO 的頁籤節點本身（保留 bolt-tab 的選取樣式），內容與識別屬性重新給
     tab = base.cloneNode(false);
     tab.id = '__ado-pdf-preview-tab';
-    tab.setAttribute(PDF_TAB_ATTR, '1');
+    tab.setAttribute(DOC_TAB_ATTR, '1');
     tab.removeAttribute('accesskey');
     tab.removeAttribute('data-focuszone');
     tab.removeAttribute('aria-posinset');
     tab.removeAttribute('aria-setsize');
     tab.innerHTML = '<span class="bolt-tab-inner-container"><span class="bolt-tab-text" data-content="Preview">Preview</span></span>';
     tab.addEventListener('click', () => {
-      if (!active?.pdfTab) return;
-      active.pdfTabActive = true;
-      syncPdfView();
+      if (!active?.docTab) return;
+      active.docTabActive = true;
+      syncDocView();
       fitFrame();
     });
     bar.appendChild(tab);
     return tab;
   }
 
-  // 顯示狀態跟著 pdfTabActive：Preview 頁籤＝顯示預覽 iframe，其他頁籤＝顯示 ADO 原生內容
-  function syncPdfView() {
-    if (!active?.pdfTab) return;
-    const show = !!active.pdfTabActive;
+  // 顯示狀態跟著 docTabActive：Preview 頁籤＝顯示預覽 iframe，其他頁籤＝顯示 ADO 原生內容
+  function syncDocView() {
+    if (!active?.docTab) return;
+    const show = !!active.docTabActive;
     if (active.old?.isConnected) active.old.style.display = show ? 'none' : active.oldDisplay;
     active.frame.style.display = show ? 'block' : 'none';
-    active.pdfTab.classList.toggle('selected', show);
-    active.pdfTab.setAttribute('aria-selected', show ? 'true' : 'false');
-    active.pdfTab.tabIndex = show ? 0 : -1;
+    active.docTab.classList.toggle('selected', show);
+    active.docTab.setAttribute('aria-selected', show ? 'true' : 'false');
+    active.docTab.tabIndex = show ? 0 : -1;
     if (show) {
       for (const t of document.querySelectorAll('.bolt-tabbar .bolt-tab')) {
-        if (t !== active.pdfTab) {
+        if (t !== active.docTab) {
           t.classList.remove('selected');
           t.setAttribute('aria-selected', 'false');
         }
@@ -544,16 +568,16 @@ scan(document.documentElement);
   // 點 ADO 原生頁籤時收起預覽、顯示該頁籤的內容（React 自己會替換 .page-content 的內容與選取狀態）
   document.addEventListener('click', (e) => {
     const tab = e.target instanceof Element ? e.target.closest('.bolt-tabbar [role="tab"]') : null;
-    if (!tab || !active?.pdfTab || tab === active.pdfTab) return;
-    active.pdfTabActive = false;
-    syncPdfView();
+    if (!tab || !active?.docTab || tab === active.docTab) return;
+    active.docTabActive = false;
+    syncDocView();
     // React 狀態沒變（點到它已選中的頁籤）時不會重畫選取樣式，這裡補上
     tab.classList.add('selected');
     tab.setAttribute('aria-selected', 'true');
   });
 
   // PDF 檔案頁的檔案內容區：.bolt-tabbar 的兄弟節點 .page-content；找不到就稍等 SPA 渲染
-  async function waitForPdfPane() {
+  async function waitForDocPane() {
     for (let i = 0; i < 40; i++) {
       const pane = document.querySelector('.bolt-tabbar ~ .page-content');
       if (pane) return pane;
@@ -562,29 +586,42 @@ scan(document.documentElement);
     throw new Error('找不到檔案內容區塊（.bolt-tabbar ~ .page-content），請回報此檔案頁的 DOM');
   }
 
-  async function renderPdfInline(info) {
+  // 內嵌預覽（PDF / xlsx 共用）：PDF 交給 Chrome 內建檢視器，xlsx 交給 AdoXlsx 的唯讀表格文件
+  async function renderDocInline(info) {
+    const isPdf = info.kind === 'pdf';
     const gen = ++renderGen;
     clearInlinePreview();
-    const [blob, pane] = await Promise.all([fetchPdfBlob(info), waitForPdfPane()]);
+    const [built, pane] = await Promise.all([
+      isPdf ? fetchBinary(info) : buildXlsxDocument(info, getNonce()),
+      waitForDocPane(),
+    ]);
     // 等待期間有更新的一次 render、或使用者已切到別的檔案 / 分支：這次的結果作廢
     const now = parseLocation();
     if (gen !== renderGen || !now || previewKey(now) !== previewKey(info)) return;
     clearInlinePreview(); // 這次是最新的；若仍有舊預覽（例如同一檔案重按），先清掉
 
-    const tab = ensurePdfPreviewTab();
+    const tab = ensureDocPreviewTab();
     if (!tab) throw new Error('找不到頁籤列，無法建立 Preview 頁籤');
 
     const f = document.createElement('iframe');
     f.setAttribute(FRAME_ATTR, '1');
     f.style.cssText = 'width:100%;height:80vh;border:0;background:#fff;display:block';
-    // PDF 由 Chrome 內建檢視器算繪，刻意不加 sandbox：實測 sandbox（無 allow-same-origin）會讓
-    // 內建檢視器載不起來（見「PDF」段落）；PDF 不是可執行的文件，沒有網頁腳本的疑慮
     navInfos = [info];
-    navUrls = [pdfBlobUrl(blob)];
+    if (isPdf) {
+      // PDF 由 Chrome 內建檢視器算繪，刻意不加 sandbox：實測 sandbox（無 allow-same-origin）會讓
+      // 內建檢視器載不起來（見「PDF」段落）；PDF 不是可執行的文件，沒有網頁腳本的疑慮
+      navUrls = [pdfBlobUrl(built)];
+    } else {
+      // xlsx 產出的是 HTML 唯讀文件（bootstrap 需要執行），與 Markdown 一樣走 sandbox iframe
+      f.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-modals');
+      f.setAttribute('allow', 'fullscreen');
+      f.setAttribute('allowfullscreen', '');
+      navUrls = [docBlobUrl(built)];
+    }
     f.src = navUrls[0];
     pane.insertAdjacentElement('afterend', f);
-    active = { key: previewKey(info), frame: f, old: pane, oldDisplay: pane.style.display, info, pdfTab: tab, pdfTabActive: true };
-    syncPdfView();
+    active = { key: previewKey(info), frame: f, old: pane, oldDisplay: pane.style.display, info, docTab: tab, docTabActive: true };
+    syncDocView();
     fitFrame();
   }
 
@@ -624,6 +661,8 @@ scan(document.documentElement);
   // 依檔案類型產生要放進 sandbox 的完整 HTML（尚未補 nonce / 連結修正腳本）
   // assetOpts：傳給 inlineRelativeAssets（全螢幕模式帶 totalBytes）
   async function buildDocument(info, nonce, assetOpts) {
+    // xlsx 是二進位檔：經 AdoXlsx 產出唯讀表格文件（沒有相對路徑資源要內嵌）
+    if (info.kind === 'xlsx') return buildXlsxDocument(info, nonce);
     const source = await fetchSource(info);
     // 資源上限要先扣掉主檔本身的大小，總量才會真的落在配額內
     if (assetOpts && assetOpts.totalBytes != null) {
@@ -638,7 +677,7 @@ scan(document.documentElement);
   // ADO 的預覽區塊是 React 管理的節點，不能用 replaceWith 拿掉：切換檔案時 React 要更新那個
   // 已不在 DOM 裡的節點，整個區塊會變成「An unexpected error has occurred within this region of the page」。
   // 做法：把原節點隱藏、把我們的 iframe 插在它後面；換檔案或 ADO 重建預覽區塊時再把 iframe 移除、恢復原節點。
-  let active = null; // { key, frame, old, oldDisplay, info, pdfTab?, pdfTabActive? }
+  let active = null; // { key, frame, old, oldDisplay, info, docTab?, docTabActive? }
 
   // key 用 info.version（網址的 version= 或版本選擇器上推斷的分支），切換分支時即使網址沒變也會重建
   const previewKey = (info) => `${info.path}|${info.version}`;
@@ -646,7 +685,7 @@ scan(document.documentElement);
   function clearInlinePreview() {
     if (!active) return;
     active.frame.remove();
-    if (active.pdfTab) active.pdfTab.remove(); // PDF 的自製 Preview 頁籤一起收掉
+    if (active.docTab) active.docTab.remove(); // PDF 的自製 Preview 頁籤一起收掉
     if (active.old.isConnected) active.old.style.display = active.oldDisplay;
     active = null;
     navInfos = [];
@@ -658,15 +697,15 @@ scan(document.documentElement);
     if (!active) return;
     const info = parseLocation();
     if (!info || !active.frame.isConnected) { clearInlinePreview(); return; }
-    if (active.pdfTab) {
+    if (active.docTab) {
       // PDF：React 只替換 .page-content 的內容（節點保留，實測確認）；若 ADO 重建了頁籤列或內容區，
-      // 把 Preview 頁籤補回去、換抓新的 pane，顯示狀態跟著 pdfTabActive（切頁籤時預覽不該被收掉）
+      // 把 Preview 頁籤補回去、換抓新的 pane，顯示狀態跟著 docTabActive（切頁籤時預覽不該被收掉）
       if (!active.old.isConnected) {
         const pane = document.querySelector('.bolt-tabbar ~ .page-content');
         if (pane) { active.old = pane; active.oldDisplay = pane.style.display; }
       }
-      active.pdfTab = ensurePdfPreviewTab();
-      syncPdfView();
+      active.docTab = ensureDocPreviewTab();
+      syncDocView();
     } else if (!active.old.isConnected) { clearInlinePreview(); return; }
     // 版本選擇器在 SPA 重繪時可能暫時不存在（info.version 為空），這時無法判斷分支，不要誤清
     if (!info.version && !new URLSearchParams(location.search).get('version')) return;
@@ -680,8 +719,8 @@ scan(document.documentElement);
   async function renderInline() {
     const info = parseLocation();
     if (!info) return;
-    // PDF 不共用這條路徑：ADO 的 PDF 檔案頁沒有 Preview 頁籤，預覽掛自製的 Preview 頁籤（見 renderPdfInline）
-    if (info.kind === 'pdf') return renderPdfInline(info);
+    // PDF / xlsx 不共用這條路徑：ADO 的這兩種檔案頁沒有 Preview 頁籤，預覽掛自製的 Preview 頁籤（見 renderDocInline）
+    if (info.kind === 'pdf' || info.kind === 'xlsx') return renderDocInline(info);
     const gen = ++renderGen;
     clearInlinePreview();
     // srcdoc 會繼承 dev.azure.com 的 CSP（script-src 'nonce-…' 'strict-dynamic'），
@@ -829,7 +868,7 @@ scan(document.documentElement);
     w.opener = null; // PDF 檢視器不需要回連這個分頁
     try {
       // blob URL 由這個 ADO 分頁建立（建立者存活，popup 才載得動）；導覽後顯示的就是 PDF 檢視器
-      w.location.href = pdfBlobUrl(await fetchPdfBlob(info));
+      w.location.href = pdfBlobUrl(await fetchBinary(info));
       w.focus();
     } catch (e) {
       w.close(); // 抓檔失敗就不要留下一個空白視窗

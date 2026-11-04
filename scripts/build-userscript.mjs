@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 把 vendor 函式庫（marked / DOMPurify / highlight.js）與 md-core.js / md-shell.js / md-theme.js
+// 把 vendor 函式庫（marked / DOMPurify / highlight.js / SheetJS）與 md-core.js / md-shell.js / md-theme.js / xlsx-core.js
 // 同步到 Tampermonkey 版本的 userscript。
 // 不用 @require：dev.azure.com 頁面有 AMD 的 define（VSS loader），UMD 函式庫會走 AMD 分支而不會掛到 window；
 // 這裡把函式庫包在遮蔽了 define / module / exports、並以 mdLibs 當 globalThis 的函式中執行，讓它們掛到 mdLibs 上。
@@ -22,15 +22,17 @@ const vendors = [
   ['vendor/marked.min.js', null],
   ['vendor/purify.min.js', null],
   ['vendor/highlight.min.js', 'hljs'],
+  ['vendor/xlsx.full.min.js', null],
 ].map(([f, local]) => {
   const src = fs.readFileSync(path.join(root, f), 'utf8').trimEnd();
   const tail = local ? `\n        mdLibs.${local} = ${local};` : '';
   return `    // ---- ${f}（原樣內嵌，請勿手改）----\n` +
-    // 只遮蔽 define / module / exports / globalThis：window 與 self 要保留真的，DOMPurify 建立實例時需要 window.document
-    `    (function (define, module, exports, globalThis) {\n${src}${tail}\n    }).call(mdLibs, undefined, undefined, undefined, mdLibs);`;
+    // 只遮蔽 define / module / exports / globalThis / require：window 與 self 要保留真的（DOMPurify 需要 window.document）；
+    // require 也要遮蔽——dev.azure.com 的 VSS loader 有 AMD 的 require，SheetJS 會誤判為 node 而呼叫 require('fs') 炸掉
+    `    (function (define, module, exports, globalThis, require) {\n${src}${tail}\n    }).call(mdLibs, undefined, undefined, undefined, mdLibs, undefined);`;
 });
 
-const modules = ['md-core.js', 'md-theme.js', 'md-shell.js'].map((f) => {
+const modules = ['md-core.js', 'md-theme.js', 'md-shell.js', 'xlsx-core.js'].map((f) => {
   let src = fs.readFileSync(path.join(root, f), 'utf8').trimEnd();
   // 模組最後一行是 })(typeof globalThis !== 'undefined' ? globalThis : window); → 改成掛在 userscript 內的 mdLibs 物件上
   const tail = "})(typeof globalThis !== 'undefined' ? globalThis : window);";

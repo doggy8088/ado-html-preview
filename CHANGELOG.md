@@ -3,6 +3,38 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.2.11] – 2026-11-05 — 修正 Excel 預覽的表格顏色（紙張語意）＋視覺驗證規範
+
+> 完整說明：[release-notes/v0.2.11.md](release-notes/v0.2.11.md)
+
+### 修正
+
+- 深色模式下 Excel 儲存格文字不可讀：未指定字色的儲存格吃 App 主題白字 × 檔案淺色底。
+  改採紙張語意——未指定字色 = 檔案 dk1、未指定底色 = 檔案 lt1，配色跟著檔案、不隨主題改變（每格寫顯式值）。
+- 移除唯讀表格斑馬紋與 hover 變色（會蓋掉檔案底色）；hover 改為不改配色的疊色。
+
+### 工程
+
+- 新增 `make test`（scripts/test-xlsx-core.mjs）：行為斷言＋紙張語意不變性＋WCAG AA 對比檢查（含預設值）。
+- AGENTS.md 新增「視覺驗證」規範（雙主題親眼確認、對比/computed style 判定、截圖工具失效要明說）。
+
+## [0.2.10] – 2026-11-05（未單獨發布，併入 v0.2.11 一起發布）— 新增 Excel（.xlsx）預覽：主題化的唯讀表格
+
+> 完整說明：[release-notes/v0.2.10.md](release-notes/v0.2.10.md)
+
+### 新功能
+
+- **Excel 預覽 (內嵌 / 全螢幕)**：`.xlsx` 以 SheetJS 解析、自家主題的唯讀表格呈現；
+  多工作表頁籤、基本樣式（粗體／字色／底色／對齊／自動換行／字級）、數字格式、合併儲存格、
+  欄寬列高、凍結窗格、欄字母與列號標頭；內嵌與 PDF 共用自製「Preview」頁籤機制。
+- 樣式還原：SheetJS 只帶 fill，其餘樣式自 wb.Styles 配合直接掃描工作表 XML 的 xf 索引還原。
+- 以 octetStream 取回（支援 Git LFS）；vendor 進 SheetJS Community（Apache-2.0）；
+  Tampermonkey 版同步（@version 0.2.10）。
+
+### 已知限制
+
+- 僅 .xlsx；不支援圖片、圖表、樞紐分析、篩選（公式顯示快取值）；單表超過 60,000 格截斷並提示。
+
 ## [0.2.9] – 2026-11-05 — PDF 預覽改用專用的 Preview 頁籤
 
 > 完整說明：[release-notes/v0.2.9.md](release-notes/v0.2.9.md)
@@ -290,6 +322,8 @@ Azure DevOps 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，`<sc
 `release-notes/v<version>.md`。推到 `main` 且版本號是新的（無對應 `v<version>` tag）就會自動建立 GitHub Release，
 詳見 [docs/PUBLISHING.md](docs/PUBLISHING.md)。
 
+[0.2.11]: release-notes/v0.2.11.md
+[0.2.10]: release-notes/v0.2.10.md
 [0.2.9]: release-notes/v0.2.9.md
 [0.2.8]: release-notes/v0.2.8.md
 [0.2.7]: release-notes/v0.2.7.md

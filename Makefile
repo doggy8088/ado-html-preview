@@ -27,11 +27,11 @@ build: ## 打包 Chrome Web Store 上架 zip（scripts/package.sh → dist/）
 userscript: ## 同步 md 模組到 Tampermonkey userscript（USERSCRIPT=<path> 可指定路徑）
 	$(NODE) scripts/build-userscript.mjs $(USERSCRIPT)
 
-test: ## 執行測試（尚未建立測試套件，目前僅提示）
-	@echo "此專案目前沒有測試套件；最接近的驗證請執行 make lint 與 make build。"
+test: ## 執行測試套件（xlsx-core 解析/渲染＋視覺驗證：紙張語意、WCAG 對比）
+	$(NODE) scripts/test-xlsx-core.mjs
 
 lint: ## 語法與靜態檢查（node --check、bash -n、JSON、appDesc 長度）
-	@for f in content.js background.js preview.js md-core.js md-shell.js md-theme.js scripts/build-userscript.mjs; do \
+	@for f in content.js background.js preview.js md-core.js md-shell.js md-theme.js xlsx-core.js scripts/build-userscript.mjs scripts/test-xlsx-core.mjs; do \
 		echo "node --check $$f"; \
 		$(NODE) --check "$$f" || exit 1; \
 	done

@@ -6,7 +6,9 @@ HTML 檔是「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」，讓 HT
 Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，
 以自家的排版主題（深淺色、側邊目錄、程式碼上色、mermaid）取代 Azure DevOps 內建的 Markdown 預覽；
 PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
-以 Git Items API（`$format=octetStream`）取回原始位元組，交給 Chrome 內建的 PDF 檢視器顯示（不用 PDF.js）。
+以 Git Items API（`$format=octetStream`）取回原始位元組，交給 Chrome 內建的 PDF 檢視器顯示（不用 PDF.js）；
+Excel 檔（.xlsx）是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，
+以 SheetJS 解析、`xlsx-core.js`（AdoXlsx）產出主題化的唯讀表格文件（多工作表頁籤、樣式、合併儲存格、凍結窗格）。
 
 ## 版本號規則
 
@@ -27,11 +29,12 @@ PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
 | 檔案 | 用途 |
 | --- | --- |
 | `manifest.json` | 擴充功能設定：權限、background、sandbox 頁面與其 CSP |
-| `content.js` | 注入 dev.azure.com：在 `.bolt-tabbar` 右側加按鈕；內嵌模式用 sandbox iframe 取代預覽區塊；全螢幕模式把 HTML 送給 background。`.md` 檔會先經 `md-core.js` + `md-shell.js` 轉成預覽文件再走同樣的路徑；`.pdf` 檔以 octetStream 抓原始位元組、包成 `blob: application/pdf` 交給 Chrome 內建 PDF 檢視器（內嵌與全螢幕皆然）；支援自動預覽與預覽內的「就地換頁」 |
+| `content.js` | 注入 dev.azure.com：在 `.bolt-tabbar` 右側加按鈕；內嵌模式用 sandbox iframe 取代預覽區塊；全螢幕模式把 HTML 送給 background。`.md` 檔會先經 `md-core.js` + `md-shell.js` 轉成預覽文件再走同樣的路徑；`.pdf` 檔以 octetStream 抓原始位元組、包成 `blob: application/pdf` 交給 Chrome 內建 PDF 檢視器；`.xlsx` 檔以 octetStream 抓原始位元組、交給 `xlsx-core.js` 產出唯讀表格文件；支援自動預覽與預覽內的「就地換頁」 |
 | `md-core.js` | Markdown → 文章 HTML（marked + highlight.js + DOMPurify）：標題錨點、目錄、`[[_TOC_]]`、`::: mermaid`、GitHub 風格 `> [!NOTE]` 提示、YAML front matter、表格 / 程式碼 / 工作清單的額外 class |
 | `md-shell.js` | 把文章包成完整預覽文件：頂欄、側邊目錄、文章本體，以及在 iframe 內執行的 bootstrap（深淺色切換、目錄高亮、複製程式碼、mermaid 載入與重畫） |
+| `xlsx-core.js` | xlsx（Excel 工作簿）→ 主題化的唯讀預覽文件（SheetJS 解析、樣式還原、多工作表頁籤、合併儲存格、欄寬列高、凍結窗格）；輸出完整 HTML 文件，內嵌（sandbox iframe）與全螢幕（sandbox 頁）共用 |
 | `md-theme.js` | 預覽主題 CSS（`AdoMarkdownTheme.css`），用 CSS 變數定義 light / dark 兩套 token |
-| `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、mermaid）；前三者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入 |
+| `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、SheetJS Community、mermaid）；前四者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入 |
 | `background.js` | Service worker：把 HTML 暫存到 `chrome.storage.session`，再用 `chrome.windows.create` 開新視窗 |
 | `preview.html` / `preview.js` | 新視窗的外層頁面（一般 extension CSP），負責取出 HTML 並交給內層 sandbox；也負責就地換頁的頁次堆疊（`pages[k]`）與訊息中繼 |
 | `sandbox.html` | 列在 manifest `sandbox` 清單的頁面（origin 為 null），收到 `render` 訊息後整頁 `document.write`；就地換頁時外層把 iframe 導來 `sandbox.html?nav=N`，這一頁以 `ready(nav)` 取回該頁內容 |
@@ -44,6 +47,17 @@ PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
 | `.github/workflows/publish.yml` | 推到 main 且版本號是新的（無 `v<version>` tag）就建立 GitHub Release；`CWS_AUTO_PUBLISH=true` 時再上傳 Chrome Web Store 並送審 |
 
 ## 開發注意事項
+
+- **視覺驗證（改到版面、樣式、顏色、主題時必做；寫「視覺 QA 通過」前的硬性要求）**：
+  1. **自動檢查先過**：`make test`（scripts/test-xlsx-core.mjs）內含「紙張語意不變性」（`<td>` 樣式在深／淺建置必須完全一致）、
+     每格顯式前景／背景（含預設值）、WCAG AA 4.5:1 對比。改 `xlsx-core.js` 或任何主題 CSS 後必跑。
+  2. **真實內容實測**：拿真實檔案算全表對比（含預設值），並在瀏覽器用 `getComputedStyle` 抽查前景／背景的實際值。
+  3. **深色與淺色都要親眼看到成品**：兩個主題各留一份證據（截圖或放大裁切圖）；只看過單一主題不算通過。
+     實測教訓（v0.2.10）：只看淺色截圖就宣告「視覺 QA 通過」，漏掉深色模式「未指定字色吃主題白字 × 檔案淺色底」不可讀。
+  4. **工具失效要明說**：截圖工具回傳快取／重複影像時不得拿它當證據（同一次連拍兩張相同 md5 即為警訊），改用
+     computed style ＋檔案層級證據，並在回報中註明視覺證據的缺口；沒親眼確認的東西不可以寫「通過」。
+  5. xlsx 唯讀表格是**紙張語意**：未指定字色 = 檔案 dk1、未指定底色 = 檔案 lt1，配色跟著「檔案」、不隨 App 主題改變
+     （Excel 裡是什麼顏色就顯示什麼顏色）。這是刻意設計，不要「修正」成跟隨主題。
 
 - 安全設計：內嵌 iframe 與 sandbox 頁都**不得**加 `allow-same-origin`，網頁腳本不能接觸 Azure DevOps 的 cookie / session。
   唯一例外是 PDF 預覽的 iframe（完全不加 `sandbox` 屬性），理由見下方的 PDF 段落，不要把它「修正」成 sandboxed。
@@ -72,6 +86,14 @@ PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
   這不是安全漏洞——PDF 由 PDFium 算繪、不執行 PDF 內嵌的 JavaScript、也不是 HTML，不會被當成可執行腳本的文件。
   全螢幕模式在使用者手勢的同步階段先開 popup（否則被快顯攔截），抓完檔直接導去 blob URL；
   不走 `chrome.storage.session`（10 MB 配額放不下大 PDF）。Tampermonkey 版要同步。
+- xlsx（.xlsx）預覽用 SheetJS Community（`vendor/xlsx.full.min.js`，Apache-2.0）解析、`xlsx-core.js` 渲染。
+  **樣式還原的關鍵**：SheetJS 只把填色放進 `cell.s`；字型／對齊在 `wb.Styles`（Fonts / CellXf）卻不帶每格的樣式索引——
+  `rawSheetExtras` 會直接掃 xlsx（ZIP）內的 sheet XML 抓每格 `s="N"` 還原完整樣式，凍結窗格
+  （`<pane topLeftCell>`）也取自同一條掃描（SheetJS 0.20.3 不暴露 pane）。
+  注意 `XLSX.CFB.read` 各環境吃的型別不一致（node 要 Buffer / Uint8Array、瀏覽器給 ArrayBuffer），
+  已用 `readCfb` 多組合嘗試，不要簡化掉；theme 色的索引順序是 lt1, dk1, lt2, dk2, accent1–6…（lt/dk 交錯）。
+  單一工作表有 60,000 格預算與 5,000 列上限（截斷並提示）。`build-userscript.mjs` 會把 SheetJS 與
+  xlsx-core.js 一起內嵌進 userscript 的標記區段。Tampermonkey 版要同步。
 - 內嵌 iframe 載的是我們建立的 **blob: 文件**（不是 srcdoc）：就地換頁靠「iframe 導覽不同 blob: URL」建立歷史紀錄，
   瀏覽器上一頁 / 前進才會逐頁可用（實測反覆重設 srcdoc 不會留下可用的歷史，上一頁只會重讀目前內容）。
   blob 文件繼承 dev.azure.com 的 CSP（實測其 `frame-src` / `child-src` 允許 `blob:`，但擋 `chrome-extension:`），

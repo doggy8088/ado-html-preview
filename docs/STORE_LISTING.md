@@ -17,11 +17,11 @@
 
 **zh-TW**
 
-在 Azure DevOps Repos 以啟用 JavaScript 的方式預覽 HTML，以更美觀、支援深淺色的排版預覽 Markdown，並以 Chrome 內建檢視器預覽 PDF，內嵌或全螢幕皆可。
+在 Azure DevOps Repos 預覽 HTML（啟用 JavaScript）、Markdown、PDF 與 Excel 工作簿，內嵌或全螢幕皆可。
 
 **en**
 
-Preview HTML with JavaScript, Markdown with a clean themeable layout, and PDF in Azure DevOps Repos: inline or full-screen.
+Preview HTML (JavaScript enabled), Markdown, PDF and Excel workbooks in Azure DevOps Repos, inline or full-screen.
 
 ## 詳細說明（Description）
 
@@ -48,6 +48,9 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 
 ▶ PDF 預覽 (內嵌) / PDF 預覽 (全螢幕)
 開啟 .pdf 檔時按鈕會變成 PDF 預覽：以二進位格式取回原始檔，用 Chrome 內建的 PDF 檢視器顯示，自帶搜尋、縮圖、列印與表單功能。不引入 PDF.js（它需要 eval，Azure DevOps 的 CSP 下只有全螢幕模式跑得動），內嵌與全螢幕都能用。
+
+▶ Excel 預覽 (內嵌) / Excel 預覽 (全螢幕)
+開啟 .xlsx 檔時按鈕會變成 Excel 預覽：以 SheetJS 解析後用自家主題的唯讀表格呈現——多工作表頁籤、儲存格樣式（粗體／字色／底色／對齊／自動換行）、數字格式、合併儲存格、欄寬列高、凍結窗格與欄字母／列號標頭。
 
 適合把專案文件、設計稿、靜態原型（含 JavaScript）直接放在 repo 裡，讓團隊在 Azure DevOps 內就能完整瀏覽。
 
@@ -77,6 +80,9 @@ On .md files the buttons switch to a Markdown preview: typography tuned for mixe
 
 ▶ PDF preview (inline / full screen)
 On .pdf files the buttons switch to a PDF preview: the file is fetched in binary and shown with Chrome's built-in PDF viewer (search, thumbnails, print, forms). No PDF.js is bundled — it needs eval, which Azure DevOps's CSP blocks outside the full-screen mode — so both modes work.
+
+▶ Excel preview (inline / full screen)
+On .xlsx files the buttons switch to an Excel preview: SheetJS parses the workbook and it renders as a themed read-only grid — sheet tabs, cell styles (bold, colors, alignment, wrapping), number formats, merged cells, column widths, frozen panes, and Excel-style column/row headers.
 
 Ideal for keeping project docs, design mock-ups and static prototypes (with JavaScript) in the repo and browsing them fully inside Azure DevOps.
 
@@ -112,7 +118,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 **單一用途（Single purpose）**
 
 ```
-在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現，Markdown 以更易讀的排版呈現，PDF 以 Chrome 內建的 PDF 檢視器呈現。
+在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現，Markdown 以更易讀的排版呈現，PDF 以 Chrome 內建的 PDF 檢視器呈現，Excel 以唯讀表格呈現。
 ```
 
 **權限理由（Permission justification）**
@@ -145,6 +151,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 4. 點「完整預覽 (全螢幕)」：開啟獨立視窗顯示完整網頁。
 5. 開啟任何 .md 檔案，按鈕變成「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，以擴充功能自己的排版主題顯示 Markdown（可在預覽右上角切換深淺色）。
 6. 開啟任何 .pdf 檔案，按鈕變成「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，以 Chrome 內建的 PDF 檢視器顯示。
+7. 開啟任何 .xlsx 檔案，按鈕變成「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，以主題化的唯讀表格顯示（可用頁籤切換工作表）。
 若審核人員沒有 Azure DevOps 帳號，免費方案可於 https://azure.microsoft.com/services/devops/ 建立，建立 repo 後上傳任一含 <script> 的 HTML 即可測試。
 ```
 

@@ -1,6 +1,6 @@
 # Azure DevOps HTML Preview
 
-Chrome 擴充功能：在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕，讓你以**啟用 JavaScript** 的方式完整預覽 repo 裡的 HTML 檔案、以**更美觀、支援深淺色**的排版預覽 Markdown 檔案，並用 **Chrome 內建的 PDF 檢視器**預覽 PDF 檔案。
+Chrome 擴充功能：在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕，讓你以**啟用 JavaScript** 的方式完整預覽 repo 裡的 HTML 檔案、以**更美觀、支援深淺色**的排版預覽 Markdown 檔案、用 **Chrome 內建的 PDF 檢視器**預覽 PDF 檔案，並以**主題化的唯讀表格**預覽 Excel（`.xlsx`）工作簿。
 
 Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔案裡的 `<script>` 全部不會執行，只能看到沒有互動的靜態畫面。這個擴充功能自己透過 Git REST API 抓原始檔，再放進**隔離的 sandbox** 重新渲染，腳本可以跑、頁面不能碰 Azure DevOps 的 cookie 或 session。
 
@@ -8,7 +8,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 功能
 
-開啟 `.html` / `.htm`、`.md` / `.markdown` 或 `.pdf` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
+開啟 `.html` / `.htm`、`.md` / `.markdown`、`.pdf` 或 `.xlsx` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
 
 | 按鈕 | 行為 |
 | --- | --- |
@@ -30,6 +30,15 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 - 相對路徑的圖片會透過 Git REST API 讀回來內嵌，跟 Azure DevOps 內建預覽一樣能顯示 repo 內的圖片。
 - Markdown 內的 HTML 會先經 DOMPurify 消毒，再放進沒有 `allow-same-origin` 的 sandbox 中渲染。
 
+### Excel 預覽
+
+開啟 `.xlsx` 檔時，兩顆按鈕變成 **Excel 預覽 (內嵌)** 與 **Excel 預覽 (全螢幕)**：以 Git REST API 的二進位格式取回原始檔，經 **SheetJS**（Community，Apache-2.0）解析後以自家主題的**唯讀表格**呈現。
+
+- 多工作表以頁籤切換；儲存格保留基本樣式（粗體／斜體／底線／刪除線／字色／底色／對齊／自動換行／字級）與數字格式（日期、百分比、千分位…）、合併儲存格、欄寬、列高、凍結窗格，並附 Excel 風格的欄字母與列號標頭。
+- 內嵌預覽與 PDF 一樣掛自製的「Preview」頁籤（Contents / History 等原生頁籤正常切換）；全螢幕走 sandbox 頁（輸出即 HTML 文件）。
+- 樣式還原：SheetJS 只把填色放進 `cell.s`，其餘樣式自 `wb.Styles` 配合直接掃描工作表 XML 的每格樣式索引（xf）還原（見 `xlsx-core.js`）。配色採**紙張語意**（跟著檔案、不隨深淺色主題改變），深色模式下表格仍維持檔案設計的原色。
+- 已知限制：僅 `.xlsx`；不支援圖片、圖表、樞紐分析與篩選（公式顯示快取值）；富文字取顯示文字；單一工作表超過 60,000 格會截斷並提示。
+
 ### PDF 預覽
 
 開啟 `.pdf` 檔時，兩顆按鈕變成 **PDF 預覽 (內嵌)** 與 **PDF 預覽 (全螢幕)**：以 Git REST API 的二進位格式取回原始檔，包成 `blob: application/pdf` 交給 **Chrome 內建的 PDF 檢視器**顯示，自帶搜尋、縮圖、列印與表單功能。
@@ -50,9 +59,9 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 使用方式
 
-1. 在 Azure DevOps 打開任何 `.html` / `.htm`、`.md` / `.markdown` 或 `.pdf` 檔案（網址為 `https://dev.azure.com/{org}/{project}/_git/{repo}?path=/x.html`）。
-2. 內嵌預覽自動顯示（Markdown 檔是「Markdown 預覽」的排版，PDF 檔是 Chrome 內建的 PDF 檢視器）。
-3. 頁籤列右側另有「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，PDF 檔則是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」），可重開預覽或改用全螢幕。
+1. 在 Azure DevOps 打開任何 `.html` / `.htm`、`.md` / `.markdown`、`.pdf` 或 `.xlsx` 檔案（網址為 `https://dev.azure.com/{org}/{project}/_git/{repo}?path=/x.html`）。
+2. 內嵌預覽自動顯示（Markdown 檔是「Markdown 預覽」的排版，PDF 檔是 Chrome 內建的 PDF 檢視器，Excel 是唯讀表格）。
+3. 頁籤列右側另有「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，PDF 檔則是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，Excel 則是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」），可重開預覽或改用全螢幕。
 
 ## 安全設計
 

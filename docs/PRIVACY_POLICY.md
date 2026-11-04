@@ -2,7 +2,7 @@
 
 _Last updated: 2026-11-04_
 
-**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, Markdown files with an alternative layout, and PDF files with Chrome's built-in PDF viewer.
+**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, Markdown files with an alternative layout, PDF files with Chrome's built-in PDF viewer, and Excel (.xlsx) workbooks as read-only tables.
 
 ## Data collection
 
@@ -13,7 +13,7 @@ The extension does **not** collect, store, transmit, sell, or share any personal
 | Access | Why | Where the data goes |
 | --- | --- | --- |
 | Pages under `https://dev.azure.com/*` | To add the two preview buttons to the file tab bar and to replace the built-in preview area when you click "完整預覽 (內嵌)". | Nowhere. The page is only modified locally in your browser. |
-| The HTML, Markdown or PDF file you are currently viewing, plus same-repository files it references by relative path (scripts, stylesheets, images) | When you click a preview button, the extension requests those files from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a frame (or, for PDFs, in Chrome's built-in PDF viewer). For the full-screen mode of HTML and Markdown it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it; PDFs are passed to the preview window as an in-memory blob URL instead. |
+| The HTML, Markdown, PDF or Excel file you are currently viewing, plus same-repository files it references by relative path (scripts, stylesheets, images) | When you click a preview button, the extension requests those files from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a frame (or, for PDFs, in Chrome's built-in PDF viewer). For the full-screen mode of HTML and Markdown it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it; PDFs are passed to the preview window as an in-memory blob URL instead. |
 
 The extension never requests any other repository content, never contacts any domain other than the Azure DevOps origin you are already using, and never writes anything to disk or to synced storage.
 
