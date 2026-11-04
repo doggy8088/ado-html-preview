@@ -4,7 +4,7 @@
     "description": "Chrome 與 Web Store 顯示的擴充功能名稱。"
   },
   "appDesc": {
-    "message": "在 Azure DevOps Repos 以啟用 JavaScript 的方式預覽 HTML，並以更美觀、支援深淺色的排版預覽 Markdown，內嵌或全螢幕皆可。",
+    "message": "在 Azure DevOps Repos 以啟用 JavaScript 的方式預覽 HTML，以更美觀、支援深淺色的排版預覽 Markdown，並以 Chrome 內建檢視器預覽 PDF，內嵌或全螢幕皆可。",
     "description": "簡短描述（最多 132 字元）。"
   }
 }

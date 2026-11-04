@@ -17,11 +17,11 @@
 
 **zh-TW**
 
-在 Azure DevOps Repos 以啟用 JavaScript 的方式預覽 HTML，並以更美觀、支援深淺色的排版預覽 Markdown，內嵌或全螢幕皆可。
+在 Azure DevOps Repos 以啟用 JavaScript 的方式預覽 HTML，以更美觀、支援深淺色的排版預覽 Markdown，並以 Chrome 內建檢視器預覽 PDF，內嵌或全螢幕皆可。
 
 **en**
 
-Preview HTML with JavaScript enabled, and Markdown with a cleaner themeable layout, in Azure DevOps Repos: inline or full-screen.
+Preview HTML with JavaScript, Markdown with a clean themeable layout, and PDF in Azure DevOps Repos: inline or full-screen.
 
 ## 詳細說明（Description）
 
@@ -45,6 +45,9 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 
 ▶ Markdown 預覽 (內嵌) / Markdown 預覽 (全螢幕)
 開啟 .md 檔時按鈕會變成 Markdown 預覽：針對中英混排調整的字型、行高與間距，深淺色主題（跟隨 Azure DevOps、可隨時切換），側邊目錄，表頭固定的長表格，程式碼語法上色與一鍵複製，mermaid 圖表，GitHub 風格的 [!NOTE] / [!WARNING] 提示區塊，repo 內的相對路徑圖片。
+
+▶ PDF 預覽 (內嵌) / PDF 預覽 (全螢幕)
+開啟 .pdf 檔時按鈕會變成 PDF 預覽：以二進位格式取回原始檔，用 Chrome 內建的 PDF 檢視器顯示，自帶搜尋、縮圖、列印與表單功能。不引入 PDF.js（它需要 eval，Azure DevOps 的 CSP 下只有全螢幕模式跑得動），內嵌與全螢幕都能用。
 
 適合把專案文件、設計稿、靜態原型（含 JavaScript）直接放在 repo 裡，讓團隊在 Azure DevOps 內就能完整瀏覽。
 
@@ -71,6 +74,9 @@ Both modes:
 
 ▶ Markdown preview (inline / full screen)
 On .md files the buttons switch to a Markdown preview: typography tuned for mixed CJK and Latin text, light and dark themes (following Azure DevOps, switchable at any time), a side table of contents, long tables with sticky headers, syntax-highlighted code with one-click copy, mermaid diagrams, GitHub-style [!NOTE] / [!WARNING] alerts, and images referenced by relative path inside the repo.
+
+▶ PDF preview (inline / full screen)
+On .pdf files the buttons switch to a PDF preview: the file is fetched in binary and shown with Chrome's built-in PDF viewer (search, thumbnails, print, forms). No PDF.js is bundled — it needs eval, which Azure DevOps's CSP blocks outside the full-screen mode — so both modes work.
 
 Ideal for keeping project docs, design mock-ups and static prototypes (with JavaScript) in the repo and browsing them fully inside Azure DevOps.
 
@@ -106,7 +112,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 **單一用途（Single purpose）**
 
 ```
-在 Azure DevOps Repos 的檔案頁面，於隔離 sandbox 中預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式呈現，Markdown 以更易讀的排版呈現。
+在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現，Markdown 以更易讀的排版呈現，PDF 以 Chrome 內建的 PDF 檢視器呈現。
 ```
 
 **權限理由（Permission justification）**
@@ -138,6 +144,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 3. 點「完整預覽 (內嵌)」：預覽區塊會改為啟用 JavaScript 的完整網頁。
 4. 點「完整預覽 (全螢幕)」：開啟獨立視窗顯示完整網頁。
 5. 開啟任何 .md 檔案，按鈕變成「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，以擴充功能自己的排版主題顯示 Markdown（可在預覽右上角切換深淺色）。
+6. 開啟任何 .pdf 檔案，按鈕變成「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，以 Chrome 內建的 PDF 檢視器顯示。
 若審核人員沒有 Azure DevOps 帳號，免費方案可於 https://azure.microsoft.com/services/devops/ 建立，建立 repo 後上傳任一含 <script> 的 HTML 即可測試。
 ```
 

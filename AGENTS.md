@@ -4,7 +4,9 @@
 在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕：
 HTML 檔是「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」，讓 HTML 能在啟用 JavaScript 的隔離 sandbox 中預覽；
 Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，
-以自家的排版主題（深淺色、側邊目錄、程式碼上色、mermaid）取代 Azure DevOps 內建的 Markdown 預覽。
+以自家的排版主題（深淺色、側邊目錄、程式碼上色、mermaid）取代 Azure DevOps 內建的 Markdown 預覽；
+PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
+以 Git Items API（`$format=octetStream`）取回原始位元組，交給 Chrome 內建的 PDF 檢視器顯示（不用 PDF.js）。
 
 ## 版本號規則
 
@@ -25,7 +27,7 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
 | 檔案 | 用途 |
 | --- | --- |
 | `manifest.json` | 擴充功能設定：權限、background、sandbox 頁面與其 CSP |
-| `content.js` | 注入 dev.azure.com：在 `.bolt-tabbar` 右側加按鈕；內嵌模式用 sandbox iframe 取代預覽區塊；全螢幕模式把 HTML 送給 background。`.md` 檔會先經 `md-core.js` + `md-shell.js` 轉成預覽文件再走同樣的路徑；支援自動預覽與預覽內的「就地換頁」 |
+| `content.js` | 注入 dev.azure.com：在 `.bolt-tabbar` 右側加按鈕；內嵌模式用 sandbox iframe 取代預覽區塊；全螢幕模式把 HTML 送給 background。`.md` 檔會先經 `md-core.js` + `md-shell.js` 轉成預覽文件再走同樣的路徑；`.pdf` 檔以 octetStream 抓原始位元組、包成 `blob: application/pdf` 交給 Chrome 內建 PDF 檢視器（內嵌與全螢幕皆然）；支援自動預覽與預覽內的「就地換頁」 |
 | `md-core.js` | Markdown → 文章 HTML（marked + highlight.js + DOMPurify）：標題錨點、目錄、`[[_TOC_]]`、`::: mermaid`、GitHub 風格 `> [!NOTE]` 提示、YAML front matter、表格 / 程式碼 / 工作清單的額外 class |
 | `md-shell.js` | 把文章包成完整預覽文件：頂欄、側邊目錄、文章本體，以及在 iframe 內執行的 bootstrap（深淺色切換、目錄高亮、複製程式碼、mermaid 載入與重畫） |
 | `md-theme.js` | 預覽主題 CSS（`AdoMarkdownTheme.css`），用 CSS 變數定義 light / dark 兩套 token |
@@ -44,6 +46,7 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
 ## 開發注意事項
 
 - 安全設計：內嵌 iframe 與 sandbox 頁都**不得**加 `allow-same-origin`，網頁腳本不能接觸 Azure DevOps 的 cookie / session。
+  唯一例外是 PDF 預覽的 iframe（完全不加 `sandbox` 屬性），理由見下方的 PDF 段落，不要把它「修正」成 sandboxed。
 - 內嵌 iframe 的 srcdoc 會繼承 dev.azure.com 的 CSP，所以每個 `<script>` 都要補上頁面的 nonce。
 - 內嵌 iframe 高度是「填滿頁籤列以下的視窗」，不要改成依內容高度撐開：使用 vh 單位的網頁會形成無限增長迴圈。
 - 內嵌模式**不能**用 `replaceWith` 拿掉 ADO 的預覽節點（React 管理）：切換檔案時 React 更新不到節點，整個區塊會報
@@ -59,6 +62,16 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
   請求來自不受信任的網頁腳本，所以只服務圖片副檔名（`IMAGE_EXT`），不要放寬成任意檔案。
   作者有 `<base href>` 時不注入。Tampermonkey 版也有同樣機制（全螢幕 popup 由主頁面監聽 popup 的 message）。
 - 內嵌模式與 userscript 的 srcdoc 會繼承 Azure DevOps 的 CSP（沒有 `unsafe-eval`），需要 eval / new Function 的函式庫（如 PDF.js）只能用擴充功能的「全螢幕」模式（extension sandbox 頁的 CSP 允許 unsafe-eval）。
+- PDF（.pdf）預覽刻意**不用 PDF.js**（需要 eval）：主檔以 `$format=octetStream` 取回原始位元組（`text` 會轉碼損毀），
+  包成 `application/pdf` 的 `blob:` URL 交給 Chrome 內建的 PDF 檢視器（`fetchPdfBlob` / `pdfBlobUrl`）。
+  內嵌預覽掛**自製的「Preview」頁籤**（`renderPdfInline` / `ensurePdfPreviewTab` / `syncPdfView`）：
+  ADO 的 PDF 檔案頁沒有 Preview 頁籤（只有 Contents / History / Compare / Blame），預覽寄生在 Contents 下
+  會讓其他頁籤切不動；`.bolt-tabbar` 與 `.page-content` 節點由 React 保留（內容依頁籤替換，實測確認），
+  所以切頁籤只是顯示 / 隱藏切換，預覽不收掉，再點回「Preview」就回來。
+  PDF 的 iframe **不加 `sandbox`**：實測 sandbox（無 `allow-same-origin`）時內建檢視器載不起來（blob URL 與直接 URL 皆然）。
+  這不是安全漏洞——PDF 由 PDFium 算繪、不執行 PDF 內嵌的 JavaScript、也不是 HTML，不會被當成可執行腳本的文件。
+  全螢幕模式在使用者手勢的同步階段先開 popup（否則被快顯攔截），抓完檔直接導去 blob URL；
+  不走 `chrome.storage.session`（10 MB 配額放不下大 PDF）。Tampermonkey 版要同步。
 - 內嵌 iframe 載的是我們建立的 **blob: 文件**（不是 srcdoc）：就地換頁靠「iframe 導覽不同 blob: URL」建立歷史紀錄，
   瀏覽器上一頁 / 前進才會逐頁可用（實測反覆重設 srcdoc 不會留下可用的歷史，上一頁只會重讀目前內容）。
   blob 文件繼承 dev.azure.com 的 CSP（實測其 `frame-src` / `child-src` 允許 `blob:`，但擋 `chrome-extension:`），

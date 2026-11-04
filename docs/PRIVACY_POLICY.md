@@ -1,8 +1,8 @@
 # Privacy Policy — Azure DevOps HTML Preview
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-11-04_
 
-**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, and Markdown files with an alternative layout, inside an isolated sandbox.
+**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, Markdown files with an alternative layout, and PDF files with Chrome's built-in PDF viewer.
 
 ## Data collection
 
@@ -13,13 +13,15 @@ The extension does **not** collect, store, transmit, sell, or share any personal
 | Access | Why | Where the data goes |
 | --- | --- | --- |
 | Pages under `https://dev.azure.com/*` | To add the two preview buttons to the file tab bar and to replace the built-in preview area when you click "完整預覽 (內嵌)". | Nowhere. The page is only modified locally in your browser. |
-| The HTML or Markdown file you are currently viewing, plus same-repository files it references by relative path (scripts, stylesheets, images) | When you click a preview button, the extension requests those files from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a sandboxed frame. For the full-screen mode it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it. |
+| The HTML, Markdown or PDF file you are currently viewing, plus same-repository files it references by relative path (scripts, stylesheets, images) | When you click a preview button, the extension requests those files from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a frame (or, for PDFs, in Chrome's built-in PDF viewer). For the full-screen mode of HTML and Markdown it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it; PDFs are passed to the preview window as an in-memory blob URL instead. |
 
 The extension never requests any other repository content, never contacts any domain other than the Azure DevOps origin you are already using, and never writes anything to disk or to synced storage.
 
 ## Sandboxing
 
 HTML files, and the HTML generated from Markdown files, are rendered in frames that use the `sandbox` attribute **without** `allow-same-origin`. Scripts inside the previewed file run with a null origin and cannot read Azure DevOps cookies, local storage, or call Azure DevOps APIs with your credentials.
+
+PDF files are not rendered as HTML at all: the raw bytes are handed to Chrome's built-in PDF viewer (PDFium), which does not execute JavaScript embedded in PDFs. Because the built-in viewer cannot load inside a `sandbox`ed frame, the PDF frame omits the `sandbox` attribute; this is safe precisely because a PDF is never parsed as an HTML document and therefore cannot run scripts of any kind.
 
 ## Permissions
 

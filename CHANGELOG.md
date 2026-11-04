@@ -3,6 +3,50 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.2.9] – 2026-11-05 — PDF 預覽改用專用的 Preview 頁籤
+
+> 完整說明：[release-notes/v0.2.9.md](release-notes/v0.2.9.md)
+
+### 行為變更
+
+- PDF 的內嵌預覽改掛**自製的「Preview」頁籤**（ADO 的 PDF 檔案頁沒有 Preview 頁籤）：
+  預覽只在這個頁籤顯示，Contents / History / Compare / Blame 正常切換、各自顯示原本的內容
+  （修正先前預覽寄生在 Contents 下、切其他頁籤「沒有效果」的問題）；
+  切到其他頁籤後再點回「Preview」，PDF 預覽還在。
+- 合併 v0.2.7（PDF 預覽）與 v0.2.8（掛載點修正）一起發布。
+
+## [0.2.8] – 2026-11-05（未單獨發布，併入 v0.2.9 一起發布）— 修正 PDF 預覽的掛載點
+
+> 完整說明：[release-notes/v0.2.8.md](release-notes/v0.2.8.md)
+
+### 修正
+
+- 修正「PDF 預覽 (內嵌)」找不到掛載區塊的問題：實測 Azure DevOps 的 PDF 檔案頁後確認
+  它沒有 Preview 頁籤與 `.markdown-preview-container` / `.files-hub-content-preview`，
+  檔案內容區實際是 `.bolt-tabbar` 的兄弟節點 `div.page-content`；內嵌預覽改為直接取代它顯示。
+
+## [0.2.7] – 2026-11-05（未單獨發布，併入 v0.2.9 一起發布）— 新增 PDF 預覽
+
+> 完整說明：[release-notes/v0.2.7.md](release-notes/v0.2.7.md)
+
+### 新功能
+
+- **PDF 預覽 (內嵌) / PDF 預覽 (全螢幕)**：打開 `.pdf` 檔案時自動以 Chrome 內建的 PDF 檢視器在檔案頁內直接預覽，
+  也可開 popup 視窗全螢幕檢視；自帶搜尋、縮圖、列印與表單功能。
+- 以 Git Items API 二進位格式取回（支援 Git LFS）；不引入 PDF.js；Tampermonkey 版同步（`@version` 0.2.7）。
+
+### 行為變更
+
+- `.pdf` 檔案頁會出現兩顆「PDF 預覽」按鈕，並與 HTML / Markdown 一樣自動顯示內嵌預覽。
+- PDF 的 iframe 不加 `sandbox`（實測 sandbox 會讓 Chrome 內建 PDF 檢視器載不起來）；
+  PDF 由 PDFium 算繪、不執行 PDF 內嵌 JavaScript、也不是 HTML，HTML / Markdown 的 sandbox 隔離不變。
+- 全螢幕 PDF 走 popup + blob URL，不經 `chrome.storage.session`（10 MB 配額放不下大 PDF）。
+
+### 已知限制
+
+- 預覽內的就地換頁不含 `.pdf`；PDF 連結仍開新分頁到 Azure DevOps 檔案頁。
+- PDF 內嵌 JavaScript（表單計算等）不執行——Chrome 內建檢視器的既有行為。
+
 ## [0.2.6] – 2026-11-04 — 表格欄位可拖曳搬移，排序全面開放
 
 > 完整說明：[release-notes/v0.2.6.md](release-notes/v0.2.6.md)
@@ -246,6 +290,12 @@ Azure DevOps 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，`<sc
 `release-notes/v<version>.md`。推到 `main` 且版本號是新的（無對應 `v<version>` tag）就會自動建立 GitHub Release，
 詳見 [docs/PUBLISHING.md](docs/PUBLISHING.md)。
 
+[0.2.9]: release-notes/v0.2.9.md
+[0.2.8]: release-notes/v0.2.8.md
+[0.2.7]: release-notes/v0.2.7.md
+[0.2.6]: release-notes/v0.2.6.md
+[0.2.5]: release-notes/v0.2.5.md
+[0.2.4]: release-notes/v0.2.4.md
 [0.2.3]: release-notes/v0.2.3.md
 [0.2.2]: release-notes/v0.2.2.md
 [0.2.1]: release-notes/v0.2.1.md
