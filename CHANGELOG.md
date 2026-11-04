@@ -3,6 +3,17 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.3.1] – 2026-11-05 — 修正商店打包清單（防漏包自我檢查）
+
+> 完整說明：[release-notes/v0.3.1.md](release-notes/v0.3.1.md)
+
+### 修正
+
+- package.sh 補齊 manifest 引用的 xlsx-core.js、docx-core.js、docx-runtime.js、vendor/xlsx.full.min.js
+  （舊清單漏包，殘缺 zip 送商店必被拒）；並新增打包自我檢查（manifest 引用檔案全數須在 zip 內）。
+- v0.3.0 的商店上傳在送出前被「審查中」擋下，無殘缺包流入商店；審查完成後
+  `gh workflow run publish.yml -f cws_upload=true` 手動上傳。
+
 ## [0.3.0] – 2026-11-05 — 檔案格式大擴充：Excel、Word 預覽與視覺驗證框架
 
 > 完整說明：[release-notes/v0.3.0.md](release-notes/v0.3.0.md)
@@ -365,6 +376,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，`<sc
 `release-notes/v<version>.md`。推到 `main` 且版本號是新的（無對應 `v<version>` tag）就會自動建立 GitHub Release，
 詳見 [docs/PUBLISHING.md](docs/PUBLISHING.md)。
 
+[0.3.1]: release-notes/v0.3.1.md
 [0.3.0]: release-notes/v0.3.0.md
 [0.2.12]: release-notes/v0.2.12.md
 [0.2.11]: release-notes/v0.2.11.md

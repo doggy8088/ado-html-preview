@@ -23,9 +23,24 @@ zip -X -r "$OUT" \
   preview.js \
   sandbox.html \
   md-core.js md-shell.js md-theme.js \
+  xlsx-core.js docx-core.js docx-runtime.js \
   vendor/marked.min.js vendor/purify.min.js vendor/highlight.min.js vendor/mermaid.min.js \
+  vendor/xlsx.full.min.js \
   icons/icon16.png icons/icon32.png icons/icon48.png icons/icon128.png \
   _locales/en/messages.json _locales/zh_TW/messages.json
 
 echo "packaged: $OUT"
+
+# 自我檢查：manifest 引用到的檔案都必須在 zip 內
+# （曾漏掉 xlsx-core / docx-core / docx-runtime / vendor-xlsx——殘缺 zip 送商店必被拒）
+MISSING=""
+for f in $(jq -r '[(.content_scripts[]?.js[]? // empty), (.web_accessible_resources[]?.resources[]? // empty), (.icons[]? // empty), (.background.service_worker? // empty), "_locales/en/messages.json", "_locales/zh_TW/messages.json"] | unique | .[]' manifest.json); do
+  unzip -Z1 "$OUT" | grep -qx "$f" || MISSING="$MISSING $f"
+done
+if [ -n "$MISSING" ]; then
+  echo "錯誤：zip 缺漏 manifest 引用的檔案:$MISSING" >&2
+  exit 1
+fi
+echo "manifest 引用檔案全數在 zip 內 ✓"
+
 unzip -l "$OUT"
