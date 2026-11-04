@@ -3,6 +3,27 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.2.6] – 2026-11-04 — 表格欄位可拖曳搬移，排序全面開放
+
+> 完整說明：[release-notes/v0.2.6.md](release-notes/v0.2.6.md)
+
+### 新功能
+
+- **拖曳搬移欄位順序**：拖曳欄名即可左右搬移整欄（位移超過 4px 進入搬移模式，純點擊仍為排序），
+  顯示插入位置標記，表頭與所有資料格隨欄移動；鍵盤可用 Alt/Ctrl+←/→ 在排序鈕上搬移，
+  兩者皆以 aria-live 播報「已將 X 欄移至第 n 欄」。
+- **「還原順序與欄寬」連欄順一起還原**：還原鈕同時復原列順序、欄位順序、aria-sort 與所有欄寬。
+
+### 行為變更
+
+- **排序不再設 5 列門檻**：2 列以上的簡單表格皆可排序（此前 2–4 列看不到排序控制項）。
+- 排序鈕的滑鼠提示加上搬移說明。
+
+### 已知限制
+
+- 合併儲存格、多層表頭、多 tbody 或巢狀表格不支援排序與欄位搬移；表頭含連結／按鈕的欄位
+  不加排序鈕但仍可拖曳搬移。
+
 ## [0.2.5] – 2026-11-04 — 新增 Makefile 開發指令
 
 > 完整說明：[release-notes/v0.2.5.md](release-notes/v0.2.5.md)

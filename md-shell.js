@@ -357,10 +357,12 @@ function setupTables(art){
     if(wide)art.classList.add('md-wide');
     if(simple&&cells.length<=4&&rows.some(function(r){return [].slice.call(r.cells).some(function(td){return (td.textContent||'').trim().length>=80;});}))wrap.classList.add('is-stackable');
     if(!simple)return;
-    if(rows.length>=5)wrap.classList.add('is-sortable');
+    // 2 列以上的簡單表格即可排序（不再設 5 列門檻）
+    if(rows.length>=2)wrap.classList.add('is-sortable');
     if(rows.length>=12)wrap.classList.add('is-filterable');
     if(cells.length>=3)wrap.classList.add('is-resizable');
     if(rows.length>=8||cells.length>=5)wrap.classList.add('is-dense');
+    rows.forEach(function(r){r.mxCells=[].slice.call(r.cells);});
     if(simple)rows.forEach(function(r,i){[].slice.call(r.cells).forEach(function(td,ci){if(headers[ci])td.setAttribute('data-label',headers[ci]);});});
     badgeStatusCells(wrap);
     // 工具列：篩選、列數、捲動提示、還原
@@ -413,13 +415,75 @@ function setupTables(art){
         grip.addEventListener('dblclick',function(e){e.preventDefault();resetWidths();});
       });
     }
+    // 欄位順序：拖曳表頭即可搬移整欄（水平位移超過 4px 進入搬移，純點擊仍為排序）；
+    // 鍵盤可在排序鈕上用 Alt/Ctrl+←/→ 搬移，兩者皆以 aria-live 播報。
+    var draggedCol=false;
+    function colIndexOf(th){return Array.prototype.indexOf.call(head.cells,th);}
+    function placeColumn(th,to){
+      var from=colIndexOf(th);
+      if(from<0||to<0||to===from||to>=head.cells.length)return;
+      [head].concat(rows).forEach(function(row){
+        var list=[].slice.call(row.cells);var moving=list.splice(from,1)[0];
+        list.splice(to,0,moving);list.forEach(function(c){row.appendChild(c);});
+      });
+      var moved=headers.splice(from,1)[0];headers.splice(to,0,moved);
+      update();
+    }
+    function dropIndex(x){
+      for(var i=0;i<head.cells.length;i++){var r=head.cells[i].getBoundingClientRect();if(x<r.left+r.width/2)return i;}
+      return head.cells.length-1;
+    }
+    function clearDropMarks(){[].forEach.call(head.cells,function(h){h.classList.remove('is-drop-before');});}
+    function moveColumnBy(th,step){
+      var from=colIndexOf(th);
+      var to=Math.min(head.cells.length-1,Math.max(0,from+step));
+      if(to===from)return;
+      placeColumn(th,to);
+      announce('已將 '+headers[to]+' 欄移至第 '+(to+1)+' 欄');
+    }
+    function bindColumnDrag(th){
+      th.addEventListener('pointerdown',function(e){
+        if(e.button!==0||(e.target.closest&&e.target.closest('.md-col-resize')))return;
+        draggedCol=false;
+        var startX=e.clientX;var dragging=false;var to=-1;
+        function move(ev){
+          if(!dragging&&Math.abs(ev.clientX-startX)<=4)return;
+          if(!dragging){dragging=true;wrap.classList.add('is-reordering');th.classList.add('is-dragging');}
+          var next=dropIndex(ev.clientX);
+          if(next!==to){clearDropMarks();to=next;head.cells[to].classList.add('is-drop-before');}
+        }
+        function up(){
+          document.removeEventListener('pointermove',move);
+          document.removeEventListener('pointerup',up);
+          document.removeEventListener('pointercancel',up);
+          if(!dragging)return;
+          draggedCol=true;
+          wrap.classList.remove('is-reordering');th.classList.remove('is-dragging');clearDropMarks();
+          placeColumn(th,to);
+          announce('已將 '+headers[colIndexOf(th)]+' 欄移至第 '+(colIndexOf(th)+1)+' 欄');
+        }
+        document.addEventListener('pointermove',move);
+        document.addEventListener('pointerup',up);
+        document.addEventListener('pointercancel',up);
+      });
+    }
+    function resetColumns(){
+      cells.forEach(function(th){head.appendChild(th);});
+      rows.forEach(function(r){r.mxCells.forEach(function(c){r.appendChild(c);});});
+      cells.forEach(function(th,i){headers[i]=(th.textContent||'').replace(/\s+/g,' ').trim();});
+      update();
+    }
+    var reorderable=cells.length>=2;
+    if(reorderable)cells.forEach(bindColumnDrag);
     if(wrap.classList.contains('is-sortable')){
-      cells.forEach(function(th,col){
+      cells.forEach(function(th){
         if(th.querySelector('a,button,input'))return;
-        var btn=document.createElement('button');btn.type='button';btn.className='md-th-sort';btn.title='排序';
+        var btn=document.createElement('button');btn.type='button';btn.className='md-th-sort';btn.title='排序 · 拖曳以搬移欄位（Alt+←/→）';
         while(th.firstChild)btn.appendChild(th.firstChild);
         th.appendChild(btn);
         btn.addEventListener('click',function(){
+          if(draggedCol){draggedCol=false;return;}
+          var col=colIndexOf(th);
           var cur=th.getAttribute('aria-sort');
           var dir=cur==='ascending'?-1:(cur==='descending'?0:1);
           cells.forEach(function(h){h.removeAttribute('aria-sort');});
@@ -427,6 +491,12 @@ function setupTables(art){
           else if(dir<0)th.setAttribute('aria-sort','descending');
           sortBy(col,dir);
           announce(dir>0?'已依 '+headers[col]+' 遞增排序':(dir<0?'已依 '+headers[col]+' 遞減排序':'已還原原始順序'));
+        });
+        btn.addEventListener('keydown',function(e){
+          var step=((e.altKey||e.ctrlKey)&&e.key==='ArrowRight')?1:(((e.altKey||e.ctrlKey)&&e.key==='ArrowLeft')?-1:0);
+          if(!step)return;
+          e.preventDefault();
+          moveColumnBy(th,step);
         });
       });
     }
@@ -446,12 +516,13 @@ function setupTables(art){
       order.forEach(function(i){frag.appendChild(rows[i]);});
       body.appendChild(frag);
     }
-    if(wrap.classList.contains('is-sortable')||wrap.classList.contains('is-resizable')){
+    if(wrap.classList.contains('is-sortable')||wrap.classList.contains('is-resizable')||reorderable){
       reset=document.createElement('button');reset.type='button';reset.className='md-table-reset';
       reset.textContent='還原順序與欄寬';reset.title='還原順序與欄寬';
       tools.appendChild(reset);
       reset.addEventListener('click',function(){
         if(wrap.classList.contains('is-sortable')){sortBy(0,0);cells.forEach(function(h){h.removeAttribute('aria-sort');});}
+        if(reorderable)resetColumns();
         if(wrap.classList.contains('is-resizable'))resetWidths();
         announce('已還原原始順序與欄寬');
       });

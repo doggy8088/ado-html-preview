@@ -1476,6 +1476,13 @@ th[aria-sort="descending"] .md-th-sort::after { content: "▼"; opacity: .9; col
 }
 .md-col-resize:is(:hover, :focus-visible, .is-active)::after { opacity: .8; }
 .md-col-resize:focus-visible { outline: none; }
+
+/* 欄位順序：拖曳表頭搬移整欄 */
+.md-table-wrap.is-sortable thead th,
+.md-table-wrap.is-resizable thead th { touch-action: pan-y; }
+.md-table-wrap.is-reordering { cursor: grabbing; user-select: none; }
+.md-table-wrap th.is-dragging { opacity: .5; }
+.md-table-wrap th.is-drop-before { box-shadow: inset 3px 0 0 var(--accent); }
 .md-table-wrap.is-resized > table { table-layout: fixed; }
 .md-table-wrap.is-resized :is(th, td) { overflow-wrap: anywhere; }
 
