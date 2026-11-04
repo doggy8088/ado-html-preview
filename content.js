@@ -21,8 +21,13 @@
 //      以 octetStream 取回原始位元組，經 SheetJS（vendor/xlsx.full.min.js）解析、
 //      xlsx-core.js（AdoXlsx）產出主題化的唯讀表格文件（多工作表頁籤、樣式、合併儲存格、凍結窗格）；
 //      內嵌與 PDF 共用自製「Preview」頁籤機制，全螢幕走 sandbox 頁（輸出就是 HTML 文件）。
+//   Word（.docx）：
+//   1. Word 預覽 (內嵌) / 2. Word 預覽 (全螢幕)：
+//      以 octetStream 取回原始位元組，經 docx-core.js（AdoDocx）產出「自帶渲染器」的高保真預覽文件——
+//      docx-preview + JSZip 只在 sandbox 文件內執行（原始碼字串來自 docx-runtime.js），
+//      依原稿還原樣式、表格框線、頁首頁尾、圖片與分頁；配色採紙張語意（跟著檔案）。
 //
-// 開啟支援的檔案（.html / .htm / .md / .markdown / .pdf / .xlsx）時，內嵌預覽會自動啟用、不必按按鈕（見 maybeAutoPreview）；
+// 開啟支援的檔案（.html / .htm / .md / .markdown / .pdf / .xlsx / .docx）時，內嵌預覽會自動啟用、不必按按鈕（見 maybeAutoPreview）；
 // 兩顆按鈕保留，用來重開預覽或改用全螢幕。
 // 預覽內點擊指向 repo 文件的連結會「就地換頁」（不開新分頁），瀏覽器上一頁 / 前進逐頁可用，像真的在逛網站；
 // 每份文件左上角另有「← 上一頁」小圓鈕（見「就地換頁」段落）。
@@ -51,11 +56,16 @@
       window: 'Excel 預覽 (全螢幕)', windowTitle: '在新視窗以主題化的唯讀表格全螢幕預覽此 Excel 工作簿',
       windowSuffix: 'Excel 預覽',
     },
+    docx: {
+      inline: 'Word 預覽 (內嵌)', inlineTitle: '在 Preview 頁籤以高保真版面顯示此 Word 文件',
+      window: 'Word 預覽 (全螢幕)', windowTitle: '在新視窗以高保真版面全螢幕預覽此 Word 文件',
+      windowSuffix: 'Word 預覽',
+    },
   };
   const MERMAID_URL = chrome.runtime.getURL('vendor/mermaid.min.js');
 
-  // 檔案類型：HTML（.html / .htm）、Markdown（.md / .markdown）、PDF（.pdf）與 Excel（.xlsx）；其他檔案不支援預覽
-  const kindOf = (path) => (/\.html?$/i.test(path) ? 'html' : /\.(md|markdown)$/i.test(path) ? 'md' : /\.pdf$/i.test(path) ? 'pdf' : /\.xlsx$/i.test(path) ? 'xlsx' : null);
+  // 檔案類型：HTML（.html / .htm）、Markdown（.md / .markdown）、PDF（.pdf）、Excel（.xlsx）與 Word（.docx）；其他檔案不支援預覽
+  const kindOf = (path) => (/\.html?$/i.test(path) ? 'html' : /\.(md|markdown)$/i.test(path) ? 'md' : /\.pdf$/i.test(path) ? 'pdf' : /\.xlsx$/i.test(path) ? 'xlsx' : /\.docx$/i.test(path) ? 'docx' : null);
 
   function parseLocation() {
     // 兩種網址：
@@ -137,6 +147,18 @@
   async function buildXlsxDocument(info, nonce) {
     const buf = await (await fetchBinary(info)).arrayBuffer();
     return AdoXlsx.buildDocument({
+      arrayBuffer: buf,
+      fileName: info.path.split('/').pop(),
+      theme: adoTheme(),
+      nonce,
+    });
+  }
+
+  // docx（.docx）：經 docx-core.js 的 AdoDocx 產出「自帶渲染器」的高保真預覽文件（HTML）。
+  // 渲染引擎（docx-preview / JSZip）在 sandbox 文件內執行，配色採紙張語意（跟著檔案）。
+  async function buildDocxDocument(info, nonce) {
+    const buf = await (await fetchBinary(info)).arrayBuffer();
+    return AdoDocx.buildDocument({
       arrayBuffer: buf,
       fileName: info.path.split('/').pop(),
       theme: adoTheme(),
@@ -460,8 +482,8 @@ scan(document.documentElement);
   // 組出最終放入 sandbox 的完整預覽文件：HTML 檔補上 CSP nonce、注入連結修正與圖片按需載入腳本。
   // nav / hash：就地換頁時的頁次與錨點（第一頁 nav=0、無錨點）。
   function finalizeDoc(html, info, nonce, nav = 0, hash = '') {
-    // xlsx 的唯讀文件在 buildXlsxDocument 已備妥帶 nonce 的 bootstrap，也沒有需要修正的連結 / 圖片
-    if (info.kind === 'xlsx') return html;
+    // xlsx / docx 的唯讀文件已備妥帶 nonce 的 bootstrap（或自帶渲染器），也沒有需要修正的連結 / 圖片
+    if (info.kind === 'xlsx' || info.kind === 'docx') return html;
     // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上
     const doc = info.kind === 'md' || !nonce ? html : html.replace(/<script\b/gi, `<script nonce="${nonce}"`);
     return injectBeforeBodyEnd(doc, previewScripts(doc, info, nonce, nav, hash));
@@ -586,13 +608,13 @@ scan(document.documentElement);
     throw new Error('找不到檔案內容區塊（.bolt-tabbar ~ .page-content），請回報此檔案頁的 DOM');
   }
 
-  // 內嵌預覽（PDF / xlsx 共用）：PDF 交給 Chrome 內建檢視器，xlsx 交給 AdoXlsx 的唯讀表格文件
+  // 內嵌預覽（PDF / xlsx / docx 共用）：PDF 交給 Chrome 內建檢視器，xlsx / docx 交給各自的唯讀預覽文件
   async function renderDocInline(info) {
     const isPdf = info.kind === 'pdf';
     const gen = ++renderGen;
     clearInlinePreview();
     const [built, pane] = await Promise.all([
-      isPdf ? fetchBinary(info) : buildXlsxDocument(info, getNonce()),
+      isPdf ? fetchBinary(info) : buildDocument(info, getNonce()),
       waitForDocPane(),
     ]);
     // 等待期間有更新的一次 render、或使用者已切到別的檔案 / 分支：這次的結果作廢
@@ -663,6 +685,8 @@ scan(document.documentElement);
   async function buildDocument(info, nonce, assetOpts) {
     // xlsx 是二進位檔：經 AdoXlsx 產出唯讀表格文件（沒有相對路徑資源要內嵌）
     if (info.kind === 'xlsx') return buildXlsxDocument(info, nonce);
+    // docx 是二進位檔：經 AdoDocx 產出高保真預覽文件（自帶渲染器）
+    if (info.kind === 'docx') return buildDocxDocument(info, nonce);
     const source = await fetchSource(info);
     // 資源上限要先扣掉主檔本身的大小，總量才會真的落在配額內
     if (assetOpts && assetOpts.totalBytes != null) {
@@ -719,8 +743,8 @@ scan(document.documentElement);
   async function renderInline() {
     const info = parseLocation();
     if (!info) return;
-    // PDF / xlsx 不共用這條路徑：ADO 的這兩種檔案頁沒有 Preview 頁籤，預覽掛自製的 Preview 頁籤（見 renderDocInline）
-    if (info.kind === 'pdf' || info.kind === 'xlsx') return renderDocInline(info);
+    // PDF / xlsx / docx 不共用這條路徑：ADO 的這些檔案頁沒有 Preview 頁籤，預覽掛自製的 Preview 頁籤（見 renderDocInline）
+    if (info.kind === 'pdf' || info.kind === 'xlsx' || info.kind === 'docx') return renderDocInline(info);
     const gen = ++renderGen;
     clearInlinePreview();
     // srcdoc 會繼承 dev.azure.com 的 CSP（script-src 'nonce-…' 'strict-dynamic'），

@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 global.XLSX = require(path.join(root, 'vendor', 'xlsx.full.min.js'));
+require(path.join(root, 'md-theme.js')); // 外殼主題 CSS 的來源（生產由 manifest / userscript 載入；測試不可漏）
 require(path.join(root, 'xlsx-core.js'));
 const { AdoXlsx } = global;
 
@@ -99,6 +100,7 @@ assert(htmlLight.includes('&lt;esc&gt;') && !htmlLight.includes('<esc>'), '儲�
 assert(htmlLight.includes('role="tab"') && htmlLight.includes('role="tabpanel"'), '工作表頁籤具有無障礙角色');
 assert(htmlLight.includes('position:sticky;top:26px') && htmlLight.includes('position:sticky;left:48px'), '凍結窗格以 sticky 位移呈現');
 assert(htmlLight.includes('2 個工作表') && htmlLight.includes('data-theme="light"'), '頂欄統計與淺色初始主題');
+assert(htmlLight.includes('.md-bar') && htmlLight.includes('--text'), '外殼主題 CSS（AdoMarkdownTheme）已內嵌（測試須載入 md-theme.js）');
 assert(htmlDark.includes('data-theme="dark"'), '深色初始主題');
 const htmlFull = AdoXlsx.buildDocument({ arrayBuffer: ab, fileName: 'x.xlsx', theme: 'dark', nonce: '' });
 assert(!htmlFull.includes('nonce="'), '全螢幕模式（nonce 為空）不寫 nonce 屬性');

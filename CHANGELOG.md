@@ -3,6 +3,27 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.2.12] – 2026-11-05 — 新增 Word（.docx）預覽：高保真版面
+
+> 完整說明：[release-notes/v0.2.12.md](release-notes/v0.2.12.md)
+
+### 新功能
+
+- **Word 預覽 (內嵌 / 全螢幕)**：`.docx` 以「自帶渲染器」的預覽文件高保真顯示（docx-preview 0.4.1 + JSZip）：
+  字型樣式、表格框線底色、頁首頁尾、圖片（data URL）、分頁與頁面尺寸依原稿；配色採紙張語意（跟著檔案）。
+  內嵌掛自製「Preview」頁籤（與 PDF / xlsx 共用機制）。
+- 安全設計：渲染引擎只在 sandbox 預覽文件內執行（原始碼字串打包於 docx-runtime.js），與 ADO 頁面完全隔離；
+  `</script` 內容一律跳脫。
+
+### 工程
+
+- `make test` 新增 docx 組裝測試（payload 逐位元回還原、注入安全、雙主題僅外殼不同）；
+  build-docx-runtime.mjs 產生渲染引擎字串檔；userscript 內嵌同步（@version 0.2.12）。
+
+### 已知限制
+
+- 僅 .docx（舊 .doc 不支援）；追蹤修訂以合併結果顯示；字型未內嵌時用系統近似字型。
+
 ## [0.2.11] – 2026-11-05 — 修正 Excel 預覽的表格顏色（紙張語意）＋視覺驗證規範
 
 > 完整說明：[release-notes/v0.2.11.md](release-notes/v0.2.11.md)
@@ -322,6 +343,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，`<sc
 `release-notes/v<version>.md`。推到 `main` 且版本號是新的（無對應 `v<version>` tag）就會自動建立 GitHub Release，
 詳見 [docs/PUBLISHING.md](docs/PUBLISHING.md)。
 
+[0.2.12]: release-notes/v0.2.12.md
 [0.2.11]: release-notes/v0.2.11.md
 [0.2.10]: release-notes/v0.2.10.md
 [0.2.9]: release-notes/v0.2.9.md

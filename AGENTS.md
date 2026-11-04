@@ -8,7 +8,9 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
 PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
 以 Git Items API（`$format=octetStream`）取回原始位元組，交給 Chrome 內建的 PDF 檢視器顯示（不用 PDF.js）；
 Excel 檔（.xlsx）是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，
-以 SheetJS 解析、`xlsx-core.js`（AdoXlsx）產出主題化的唯讀表格文件（多工作表頁籤、樣式、合併儲存格、凍結窗格）。
+以 SheetJS 解析、`xlsx-core.js`（AdoXlsx）產出主題化的唯讀表格文件（多工作表頁籤、樣式、合併儲存格、凍結窗格）；
+Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」，
+以 `docx-core.js`（AdoDocx）產出「自帶渲染器」的高保真預覽文件（docx-preview 在 sandbox 文件內執行）。
 
 ## 版本號規則
 
@@ -33,8 +35,10 @@ Excel 檔（.xlsx）是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)
 | `md-core.js` | Markdown → 文章 HTML（marked + highlight.js + DOMPurify）：標題錨點、目錄、`[[_TOC_]]`、`::: mermaid`、GitHub 風格 `> [!NOTE]` 提示、YAML front matter、表格 / 程式碼 / 工作清單的額外 class |
 | `md-shell.js` | 把文章包成完整預覽文件：頂欄、側邊目錄、文章本體，以及在 iframe 內執行的 bootstrap（深淺色切換、目錄高亮、複製程式碼、mermaid 載入與重畫） |
 | `xlsx-core.js` | xlsx（Excel 工作簿）→ 主題化的唯讀預覽文件（SheetJS 解析、樣式還原、多工作表頁籤、合併儲存格、欄寬列高、凍結窗格）；輸出完整 HTML 文件，內嵌（sandbox iframe）與全螢幕（sandbox 頁）共用 |
+| `docx-core.js` | docx（Word 文件）→「自帶渲染器」的高保真唯讀預覽文件（內容 base64 內嵌、docx-preview / JSZip 只在 sandbox 文件內執行、紙張語意）；內嵌與全螢幕共用 |
+| `docx-runtime.js` | 產生檔（`node scripts/build-docx-runtime.mjs`，請勿手改）：docx-preview / JSZip 的原始碼字串（AdoDocxLibs），只被寫進預覽文件內執行 |
 | `md-theme.js` | 預覽主題 CSS（`AdoMarkdownTheme.css`），用 CSS 變數定義 light / dark 兩套 token |
-| `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、SheetJS Community、mermaid）；前四者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入 |
+| `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、SheetJS Community、mermaid、docx-preview 與 JSZip）；前四者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入；docx-preview / JSZip **不載入到頁面**——以原始碼字串打包進 `docx-runtime.js`、只在 sandbox 預覽文件內執行 |
 | `background.js` | Service worker：把 HTML 暫存到 `chrome.storage.session`，再用 `chrome.windows.create` 開新視窗 |
 | `preview.html` / `preview.js` | 新視窗的外層頁面（一般 extension CSP），負責取出 HTML 並交給內層 sandbox；也負責就地換頁的頁次堆疊（`pages[k]`）與訊息中繼 |
 | `sandbox.html` | 列在 manifest `sandbox` 清單的頁面（origin 為 null），收到 `render` 訊息後整頁 `document.write`；就地換頁時外層把 iframe 導來 `sandbox.html?nav=N`，這一頁以 `ready(nav)` 取回該頁內容 |
@@ -52,6 +56,10 @@ Excel 檔（.xlsx）是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)
   1. **自動檢查先過**：`make test`（scripts/test-xlsx-core.mjs）內含「紙張語意不變性」（`<td>` 樣式在深／淺建置必須完全一致）、
      每格顯式前景／背景（含預設值）、WCAG AA 4.5:1 對比。改 `xlsx-core.js` 或任何主題 CSS 後必跑。
   2. **真實內容實測**：拿真實檔案算全表對比（含預設值），並在瀏覽器用 `getComputedStyle` 抽查前景／背景的實際值。
+     對比要量在**文字 run 層**（有文字的最內層元素）而不是容器層——容器常是未上色的預設值，量到它會誤判
+     （docx 實測教訓：量到 TD 容器誤報 4.03:1，run 層才是檔案指定的白字）；判定依 WCAG：一般 4.5:1、
+     大字／粗體 3:1。**來源檔案本身的低對比如實還原、回報註明**，不得擅自「修正」（違反紙張語意）；
+     存疑時解剖來源檔 XML（如 word/document.xml 的 w:color / w:shd）當 ground truth 對照。
   3. **深色與淺色都要親眼看到成品**：兩個主題各留一份證據（截圖或放大裁切圖）；只看過單一主題不算通過。
      實測教訓（v0.2.10）：只看淺色截圖就宣告「視覺 QA 通過」，漏掉深色模式「未指定字色吃主題白字 × 檔案淺色底」不可讀。
   4. **工具失效要明說**：截圖工具回傳快取／重複影像時不得拿它當證據（同一次連拍兩張相同 md5 即為警訊），改用
@@ -94,6 +102,14 @@ Excel 檔（.xlsx）是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)
   已用 `readCfb` 多組合嘗試，不要簡化掉；theme 色的索引順序是 lt1, dk1, lt2, dk2, accent1–6…（lt/dk 交錯）。
   單一工作表有 60,000 格預算與 5,000 列上限（截斷並提示）。`build-userscript.mjs` 會把 SheetJS 與
   xlsx-core.js 一起內嵌進 userscript 的標記區段。Tampermonkey 版要同步。
+- docx（.docx）預覽刻意採「**自帶渲染器**」設計：docx-preview（Apache-2.0）＋JSZip（MIT）以原始碼字串打包在
+  `docx-runtime.js`（`node scripts/build-docx-runtime.mjs` 產生，改 vendor 版本後要重跑），只寫進 sandbox
+  預覽文件內執行——父網頁與 userscript 都不載入這兩個函式庫（渲染不可信 docx 的程式與 ADO 頁面完全隔離）。
+  文件內容以 base64 內嵌、載入即 `docx.renderAsync` 渲染（**`useBase64URL: true` 必須保留**：圖片轉 data URL，
+  否則序列化後的 blob 連結會失效）。配色採紙張語意（內容跟著檔案、頂欄外殼才跟主題）。
+  `<script>` 內容一律過 `scriptSafe`（跳脫 `</script`）。`make test` 的 scripts/test-docx-core.mjs 驗證組裝
+  （payload 逐位元回還原、跳脫、雙主題僅外殼不同）；渲染層依「視覺驗證」規範實測。
+  `build-userscript.mjs` 把 docx-runtime.js 當 vendor（包裝後掛 `mdLibs.AdoDocxLibs`）、docx-core.js 當模組內嵌。
 - 內嵌 iframe 載的是我們建立的 **blob: 文件**（不是 srcdoc）：就地換頁靠「iframe 導覽不同 blob: URL」建立歷史紀錄，
   瀏覽器上一頁 / 前進才會逐頁可用（實測反覆重設 srcdoc 不會留下可用的歷史，上一頁只會重讀目前內容）。
   blob 文件繼承 dev.azure.com 的 CSP（實測其 `frame-src` / `child-src` 允許 `blob:`，但擋 `chrome-extension:`），

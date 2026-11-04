@@ -1,6 +1,6 @@
 # Azure DevOps HTML Preview
 
-Chrome 擴充功能：在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕，讓你以**啟用 JavaScript** 的方式完整預覽 repo 裡的 HTML 檔案、以**更美觀、支援深淺色**的排版預覽 Markdown 檔案、用 **Chrome 內建的 PDF 檢視器**預覽 PDF 檔案，並以**主題化的唯讀表格**預覽 Excel（`.xlsx`）工作簿。
+Chrome 擴充功能：在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕，讓你以**啟用 JavaScript** 的方式完整預覽 repo 裡的 HTML 檔案、以**更美觀、支援深淺色**的排版預覽 Markdown 檔案、用 **Chrome 內建的 PDF 檢視器**預覽 PDF 檔案、以**主題化的唯讀表格**預覽 Excel（`.xlsx`）工作簿，並以**高保真版面**預覽 Word（`.docx`）文件。
 
 Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔案裡的 `<script>` 全部不會執行，只能看到沒有互動的靜態畫面。這個擴充功能自己透過 Git REST API 抓原始檔，再放進**隔離的 sandbox** 重新渲染，腳本可以跑、頁面不能碰 Azure DevOps 的 cookie 或 session。
 
@@ -8,7 +8,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 功能
 
-開啟 `.html` / `.htm`、`.md` / `.markdown`、`.pdf` 或 `.xlsx` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
+開啟 `.html` / `.htm`、`.md` / `.markdown`、`.pdf`、`.xlsx` 或 `.docx` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
 
 | 按鈕 | 行為 |
 | --- | --- |
@@ -38,6 +38,15 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 - 內嵌預覽與 PDF 一樣掛自製的「Preview」頁籤（Contents / History 等原生頁籤正常切換）；全螢幕走 sandbox 頁（輸出即 HTML 文件）。
 - 樣式還原：SheetJS 只把填色放進 `cell.s`，其餘樣式自 `wb.Styles` 配合直接掃描工作表 XML 的每格樣式索引（xf）還原（見 `xlsx-core.js`）。配色採**紙張語意**（跟著檔案、不隨深淺色主題改變），深色模式下表格仍維持檔案設計的原色。
 - 已知限制：僅 `.xlsx`；不支援圖片、圖表、樞紐分析與篩選（公式顯示快取值）；富文字取顯示文字；單一工作表超過 60,000 格會截斷並提示。
+
+### Word 預覽
+
+開啟 `.docx` 檔時，兩顆按鈕變成 **Word 預覽 (內嵌)** 與 **Word 預覽 (全螢幕)**：以 Git REST API 的二進位格式取回原始檔，產出**自帶渲染器**的高保真預覽文件（docx-preview ＋ JSZip 只在 sandbox 文件內執行）。
+
+- 依原稿還原：字型樣式、表格框線與底色、頁首頁尾、圖片（內嵌 data URL）、分頁與頁面尺寸。
+- 配色採**紙張語意**（跟著檔案、不隨深淺色主題改變）；頂欄外殼才跟隨主題。
+- 安全：渲染器與文件內容都在 sandbox 內執行，與 Azure DevOps 頁面完全隔離；內容中的 `</script>` 會被跳脫。
+- 已知限制：僅 `.docx`（舊 `.doc` 不支援）；追蹤修訂以合併結果顯示；字型未內嵌時以系統近似字型呈現。
 
 ### PDF 預覽
 
