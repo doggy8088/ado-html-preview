@@ -59,6 +59,9 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
   請求來自不受信任的網頁腳本，所以只服務圖片副檔名（`IMAGE_EXT`），不要放寬成任意檔案。
   作者有 `<base href>` 時不注入。Tampermonkey 版也有同樣機制（全螢幕 popup 由主頁面監聽 popup 的 message）。
 - 內嵌模式與 userscript 的 srcdoc 會繼承 Azure DevOps 的 CSP（沒有 `unsafe-eval`），需要 eval / new Function 的函式庫（如 PDF.js）只能用擴充功能的「全螢幕」模式（extension sandbox 頁的 CSP 允許 unsafe-eval）。
+- 打開支援的檔案時 `content.js` 的 `maybeAutoPreview()` 會自動顯示內嵌預覽：每個檔案 key（path + version）只自動觸發一次
+  （避免 MutationObserver → render → mutation 的迴圈，也不在使用者切走頁籤後把他拉回 Preview），
+  `_a` 指向 History / Blame 等非預覽頁籤、或分支尚未確定（version 為空）時不自動顯示；Tampermonkey 版要同步。
 - 改完程式後需到 `chrome://extensions` 重新載入擴充功能，並重新整理 Azure DevOps 頁面才會生效。
 - Markdown 預覽的 DOM 結構由 `md-shell.js` 決定、樣式只在 `md-theme.js`；改版面請先改 CSS，真的需要新元素再動 shell，並同步更新 Tampermonkey 版本（它把三個 md-*.js 內嵌在同一個檔案裡）。
 - Markdown 預覽的 iframe 取代的是 ADO 的 `.markdown-preview-container`（Markdown 沒有 srcdoc iframe）；ADO 的深色模式以 `body.ms-vss-web-vsts-theme-dark` 判斷，預覽文件的初始主題由此決定，之後可在預覽內切換。

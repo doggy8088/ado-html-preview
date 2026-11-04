@@ -8,6 +8,8 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 功能
 
+開啟 `.html` / `.htm` 或 `.md` / `.markdown` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
+
 | 按鈕 | 行為 |
 | --- | --- |
 | **完整預覽 (內嵌)** | 直接取代 Preview 頁籤內的預覽區塊，高度填滿視窗。若目前在 Contents / History 等頁籤會自動切到 Preview。 |
@@ -38,8 +40,8 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 ## 使用方式
 
 1. 在 Azure DevOps 打開任何 `.html` / `.htm` 或 `.md` / `.markdown` 檔案（網址為 `https://dev.azure.com/{org}/{project}/_git/{repo}?path=/x.html`）。
-2. 頁籤列右側會出現「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」）。
-3. 點其中一顆即可。
+2. 內嵌預覽自動顯示（Markdown 檔是「Markdown 預覽」的排版）。
+3. 頁籤列右側另有「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」），可重開預覽或改用全螢幕。
 
 ## 安全設計
 

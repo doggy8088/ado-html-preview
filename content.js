@@ -10,6 +10,9 @@
 //      用 md-core.js（marked + highlight.js + DOMPurify）把 Markdown 轉成 HTML，
 //      再以 md-shell.js + md-theme.js 包成支援深淺色、側邊目錄、程式碼複製與 mermaid 的預覽文件，
 //      之後走與 HTML 相同的兩種顯示路徑。相對路徑的圖片會透過 Git Items API 抓回來內嵌。
+//
+// 開啟支援的檔案（.html / .htm / .md / .markdown）時，內嵌預覽會自動啟用、不必按按鈕（見 maybeAutoPreview）；
+// 兩顆按鈕保留，用來重開預覽或改用全螢幕。
 
 (() => {
   const WRAP_ID = '__ado_js_preview_wrap';
@@ -33,7 +36,9 @@
     //   /{org}/{project}/_git/{repo}?path=/x.html&version=GBbranch
     //   /{org}/_git/{repo}?path=/x.html            ← 專案名稱與 repo 同名時 Azure DevOps 會省略專案段
     // 後者的 REST API 仍需要專案段，實測用 repo 名當專案名可正常取得檔案（org 層級不帶專案會回 400）。
-    const m = location.pathname.match(/^\/([^/]+)(?:\/([^/]+))?\/_git\/([^/?#]+)/);
+    // 結尾的 repo 段後不能再有路徑段：PR / commit 等頁面（/_git/{repo}/pullrequest/123?path=/x.html）
+    // 也會帶 path= 參數，但那些頁面沒有可取代的預覽區塊，不是本擴充功能的對象。
+    const m = location.pathname.match(/^\/([^/]+)(?:\/([^/]+))?\/_git\/([^/?#]+)\/?$/);
     if (!m) return null;
     const qs = new URLSearchParams(location.search);
     const path = qs.get('path');
@@ -509,6 +514,37 @@ scan(document.documentElement);
   }
   window.addEventListener('resize', fitFrame);
 
+  // ---------- 自動預覽 ----------
+  // 開啟支援的檔案時自動顯示內嵌預覽，不必按按鈕。
+  // 每個檔案 key 只自動觸發一次，切換檔案 / 分支（key 改變）才會再自動顯示：
+  //   - renderInline 會改動 DOM、觸發本檔底部的 MutationObserver，不去重會形成「自動預覽 → DOM 變動 → 又自動預覽」的迴圈
+  //   - 使用者手動切回 Contents 等頁籤後不該被強行拉回 Preview；ADO 重建預覽區塊時同理，需要時按按鈕即可
+  let autoKey = null;        // 最後一次自動顯示（含嘗試失敗）的檔案 key
+  let autoRendering = false; // 自動顯示進行中：避免 renderInline 改 DOM 引發的 MutationObserver 重入
+
+  // 使用者明確停留在其他頁籤（History / Blame / Commit…）時不要搶走焦點；
+  // 沒有 _a、_a=contents 或 _a=preview 則視為「打開檔案」，自動顯示預覽。
+  function inOtherTab() {
+    const a = new URLSearchParams(location.search).get('_a') || '';
+    if (!a || /^(contents|preview)$/i.test(a)) return false;
+    // 未知的 _a 值仍照樣自動預覽：ADO 改頁籤參數時寧可多預覽一次，也不要功能整個失效
+    return /^(history|blame|commit|branch|tag|diff|compare|push|pull|shelveset|setting)/i.test(a);
+  }
+
+  function maybeAutoPreview(info) {
+    if (autoRendering || inOtherTab()) return;
+    // 版本選擇器還沒渲染時 version 為空，抓檔會落到 API 的預設分支（檔案不在預設分支時回 404）；
+    // 等分支確定後的 MutationObserver 呼叫再自動顯示。網址帶 version= 時一開始就緒。
+    if (!info.version) return;
+    const key = previewKey(info);
+    if (key === autoKey || (active && active.key === key)) { autoKey = key; return; }
+    autoKey = key;
+    autoRendering = true;
+    renderInline()
+      .catch((e) => console.warn('[Azure DevOps HTML Preview] 自動預覽失敗：', e))
+      .finally(() => { autoRendering = false; });
+  }
+
   // ---------- 2. 全螢幕（新視窗） ----------
   async function openWindow() {
     const info = parseLocation();
@@ -572,6 +608,7 @@ scan(document.documentElement);
     const tabbar = document.querySelector('.bolt-tabbar');
     const existing = document.getElementById(WRAP_ID);
     if (!info || !tabbar) { existing?.remove(); return; }
+    maybeAutoPreview(info);
     // 同一個頁籤列、同一種檔案類型就不重建（在 .html 與 .md 之間切換時要換按鈕文字）
     if (existing && existing.parentElement === tabbar && existing.dataset.kind === info.kind) return;
     existing?.remove();
