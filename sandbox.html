@@ -5,7 +5,9 @@
   <title>sandbox</title>
   <script>
     // 此頁在 manifest 的 sandbox 清單中：origin 為 null、CSP 允許 inline script。
-    // 先通知外層 ready，收到 HTML 後直接整頁重寫，讓網頁腳本在隔離環境中執行。
+    // 先通知外層 ready（帶 ?nav= 的頁次），收到 render 後整頁重寫，讓網頁腳本在隔離環境中執行。
+    // 換頁 = 外層把 iframe 導來 sandbox.html?nav=N：每個頁次都是一筆真的歷史紀錄，
+    // 上一頁會重新載入這一頁並再次送出 ready(nav)，由外層依頁次取回內容。
     window.addEventListener('message', (ev) => {
       if (ev.source !== window.parent || ev.data?.type !== 'render') return;
       document.open();
@@ -14,8 +16,9 @@
       const report = () => window.parent.postMessage({ type: 'title', title: document.title }, '*');
       report();
       window.addEventListener('load', report);
-    }, { once: true });
-    window.parent.postMessage({ type: 'ready' }, '*');
+    });
+    const nav = parseInt(new URLSearchParams(location.search).get('nav') || '0', 10) || 0;
+    window.parent.postMessage({ type: 'ready', nav }, '*');
   </script>
 </head>
 <body></body>

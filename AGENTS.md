@@ -25,14 +25,14 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
 | 檔案 | 用途 |
 | --- | --- |
 | `manifest.json` | 擴充功能設定：權限、background、sandbox 頁面與其 CSP |
-| `content.js` | 注入 dev.azure.com：在 `.bolt-tabbar` 右側加按鈕；內嵌模式用 sandbox iframe 取代預覽區塊；全螢幕模式把 HTML 送給 background。`.md` 檔會先經 `md-core.js` + `md-shell.js` 轉成預覽文件再走同樣的路徑 |
+| `content.js` | 注入 dev.azure.com：在 `.bolt-tabbar` 右側加按鈕；內嵌模式用 sandbox iframe 取代預覽區塊；全螢幕模式把 HTML 送給 background。`.md` 檔會先經 `md-core.js` + `md-shell.js` 轉成預覽文件再走同樣的路徑；支援自動預覽與預覽內的「就地換頁」 |
 | `md-core.js` | Markdown → 文章 HTML（marked + highlight.js + DOMPurify）：標題錨點、目錄、`[[_TOC_]]`、`::: mermaid`、GitHub 風格 `> [!NOTE]` 提示、YAML front matter、表格 / 程式碼 / 工作清單的額外 class |
 | `md-shell.js` | 把文章包成完整預覽文件：頂欄、側邊目錄、文章本體，以及在 iframe 內執行的 bootstrap（深淺色切換、目錄高亮、複製程式碼、mermaid 載入與重畫） |
 | `md-theme.js` | 預覽主題 CSS（`AdoMarkdownTheme.css`），用 CSS 變數定義 light / dark 兩套 token |
 | `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、mermaid）；前三者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入 |
 | `background.js` | Service worker：把 HTML 暫存到 `chrome.storage.session`，再用 `chrome.windows.create` 開新視窗 |
-| `preview.html` / `preview.js` | 新視窗的外層頁面（一般 extension CSP），負責取出 HTML 並交給內層 sandbox |
-| `sandbox.html` | 列在 manifest `sandbox` 清單的頁面（origin 為 null），收到 HTML 後整頁 `document.write` |
+| `preview.html` / `preview.js` | 新視窗的外層頁面（一般 extension CSP），負責取出 HTML 並交給內層 sandbox；也負責就地換頁的頁次堆疊（`pages[k]`）與訊息中繼 |
+| `sandbox.html` | 列在 manifest `sandbox` 清單的頁面（origin 為 null），收到 `render` 訊息後整頁 `document.write`；就地換頁時外層把 iframe 導來 `sandbox.html?nav=N`，這一頁以 `ready(nav)` 取回該頁內容 |
 | `_locales/` | i18n 訊息（en 為 default_locale、zh_TW），manifest 的 name / description 以 `__MSG_appName__` / `__MSG_appDesc__` 引用 |
 | `icons/` | 擴充功能圖示（16/32/48/128 與 1024 母檔），由 AI 生成；userscript 的圖示是同一張，放在 TampermonkeyUserscripts 的 `images/AzureDevOpsHtmlPreview.png` |
 | `store-assets/` | Chrome Web Store 宣傳圖（440×280、1400×560）與截圖 |
@@ -59,6 +59,15 @@ Markdown 檔（.md / .markdown）是「Markdown 預覽 (內嵌)」與「Markdown
   請求來自不受信任的網頁腳本，所以只服務圖片副檔名（`IMAGE_EXT`），不要放寬成任意檔案。
   作者有 `<base href>` 時不注入。Tampermonkey 版也有同樣機制（全螢幕 popup 由主頁面監聽 popup 的 message）。
 - 內嵌模式與 userscript 的 srcdoc 會繼承 Azure DevOps 的 CSP（沒有 `unsafe-eval`），需要 eval / new Function 的函式庫（如 PDF.js）只能用擴充功能的「全螢幕」模式（extension sandbox 頁的 CSP 允許 unsafe-eval）。
+- 內嵌 iframe 載的是我們建立的 **blob: 文件**（不是 srcdoc）：就地換頁靠「iframe 導覽不同 blob: URL」建立歷史紀錄，
+  瀏覽器上一頁 / 前進才會逐頁可用（實測反覆重設 srcdoc 不會留下可用的歷史，上一頁只會重讀目前內容）。
+  blob 文件繼承 dev.azure.com 的 CSP（實測其 `frame-src` / `child-src` 允許 `blob:`，但擋 `chrome-extension:`），
+  所以每個 `<script>` 都要補上頁面的 nonce；blob URL 建立後不可 revoke（上一頁靠重新載入它）。
+- 就地換頁協定（`linkFixScript` 產生的預覽內腳本 ↔ 父頁面）：點 repo 文件連結送 `ado-nav-request {path, hash, from}`，
+  父頁面組好新文件（`finalizeDoc`）後導覽 iframe（內嵌 / userscript 用 blob: URL；全螢幕用 `sandbox.html?nav=N`，
+  由 background 的 `build-preview-doc` 轉給來源分頁組檔）；`ado-nav-back` 則呼叫父視窗的 `history.back()`。
+  每份文件的 `info` 存在 `navInfos[k]`（換頁時依 `from` 截斷），相對路徑資源與按需圖片才能以正確的目錄為基準。
+  預覽文件左上角的「← 上一頁」圓鈕由 `linkFixScript` 注入（nav > 0 才顯示）；Tampermonkey 的 popup 用自己的一份 stack。
 - 打開支援的檔案時 `content.js` 的 `maybeAutoPreview()` 會自動顯示內嵌預覽：每個檔案 key（path + version）只自動觸發一次
   （避免 MutationObserver → render → mutation 的迴圈，也不在使用者切走頁籤後把他拉回 Preview），
   `_a` 指向 History / Blame 等非預覽頁籤、或分支尚未確定（version 為空）時不自動顯示；Tampermonkey 版要同步。

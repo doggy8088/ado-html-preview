@@ -26,6 +26,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     );
     return true; // 非同步回覆
   }
+  // 全螢幕視窗裡就地換頁：同樣轉給來源分頁，由它抓檔、內嵌資源、Markdown 排版後回傳整份預覽文件
+  if (msg?.type === 'build-preview-doc') {
+    chrome.tabs.sendMessage(msg.tabId, { type: 'build-preview-doc', info: msg.info, nav: msg.nav, hash: msg.hash }).then(
+      (reply) => sendResponse(reply || { ok: false, error: '來源分頁沒有回應' }),
+      () => sendResponse({ ok: false, error: '來源的 Azure DevOps 分頁已關閉或重新整理，無法換頁' }),
+    );
+    return true; // 非同步回覆
+  }
   if (!msg || msg.type !== 'open-preview') return;
   (async () => {
     try {
