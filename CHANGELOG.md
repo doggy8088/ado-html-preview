@@ -3,7 +3,29 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
-## [0.2.12] – 2026-11-05 — 新增 Word（.docx）預覽：高保真版面
+## [0.3.0] – 2026-11-05 — 檔案格式大擴充：Excel、Word 預覽與視覺驗證框架
+
+> 完整說明：[release-notes/v0.3.0.md](release-notes/v0.3.0.md)
+
+### 新功能（自 v0.2.10–v0.2.12 併入）
+
+- **Excel（.xlsx）預覽**：SheetJS 解析、主題化唯讀表格（多工作表頁籤、樣式、數字格式、
+  合併儲存格、欄寬列高、凍結窗格、欄字母／列號標頭）；樣式以 wb.Styles＋sheet XML 的 xf 索引還原。
+- **Word（.docx）預覽**：docx-preview＋JSZip 高保真「自帶渲染器」（樣式、表格框線、頁首頁尾、
+  圖片、分頁依原稿）；渲染引擎只在 sandbox 預覽文件內執行。
+- 三種二進位格式（PDF / xlsx / docx）共用自製「Preview」頁籤機制。
+
+### 品質工程
+
+- **紙張語意**：唯讀表格與文件的配色跟著「檔案」、不隨主題改變（深色模式可讀性修正）。
+- **視覺驗證框架**（AGENTS.md）：雙主題親眼確認、run 層對比（WCAG）、紙張語意不變性、
+  來源檔 ground truth 對照；`make test` 52 項（xlsx＋docx）。
+
+### 已知限制
+
+- xlsx：僅 .xlsx、不支援圖表／樞紐／篩選（公式顯示快取值）；docx：僅 .docx、追蹤修訂合併顯示。
+
+## [0.2.12] – 2026-11-05（未單獨發布，併入 v0.3.0 一起發布）— 新增 Word（.docx）預覽：高保真版面
 
 > 完整說明：[release-notes/v0.2.12.md](release-notes/v0.2.12.md)
 
@@ -24,7 +46,7 @@
 
 - 僅 .docx（舊 .doc 不支援）；追蹤修訂以合併結果顯示；字型未內嵌時用系統近似字型。
 
-## [0.2.11] – 2026-11-05 — 修正 Excel 預覽的表格顏色（紙張語意）＋視覺驗證規範
+## [0.2.11] – 2026-11-05（未單獨發布，併入 v0.3.0 一起發布）— 修正 Excel 預覽的表格顏色（紙張語意）＋視覺驗證規範
 
 > 完整說明：[release-notes/v0.2.11.md](release-notes/v0.2.11.md)
 
@@ -39,7 +61,7 @@
 - 新增 `make test`（scripts/test-xlsx-core.mjs）：行為斷言＋紙張語意不變性＋WCAG AA 對比檢查（含預設值）。
 - AGENTS.md 新增「視覺驗證」規範（雙主題親眼確認、對比/computed style 判定、截圖工具失效要明說）。
 
-## [0.2.10] – 2026-11-05（未單獨發布，併入 v0.2.11 一起發布）— 新增 Excel（.xlsx）預覽：主題化的唯讀表格
+## [0.2.10] – 2026-11-05（未單獨發布，併入 v0.3.0 一起發布）— 新增 Excel（.xlsx）預覽：主題化的唯讀表格
 
 > 完整說明：[release-notes/v0.2.10.md](release-notes/v0.2.10.md)
 
@@ -343,6 +365,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，`<sc
 `release-notes/v<version>.md`。推到 `main` 且版本號是新的（無對應 `v<version>` tag）就會自動建立 GitHub Release，
 詳見 [docs/PUBLISHING.md](docs/PUBLISHING.md)。
 
+[0.3.0]: release-notes/v0.3.0.md
 [0.2.12]: release-notes/v0.2.12.md
 [0.2.11]: release-notes/v0.2.11.md
 [0.2.10]: release-notes/v0.2.10.md
