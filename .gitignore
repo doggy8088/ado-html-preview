@@ -4,3 +4,4 @@ dist/
 *.swp
 .xlsx-test/
 .docx-test/
+.pptx-test/

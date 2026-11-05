@@ -10,7 +10,9 @@ PDF 檔（.pdf）是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，
 Excel 檔（.xlsx）是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，
 以 SheetJS 解析、`xlsx-core.js`（AdoXlsx）產出主題化的唯讀表格文件（多工作表頁籤、樣式、合併儲存格、凍結窗格）；
 Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」，
-以 `docx-core.js`（AdoDocx）產出「自帶渲染器」的高保真預覽文件（docx-preview 在 sandbox 文件內執行）。
+以 `docx-core.js`（AdoDocx）產出「自帶渲染器」的高保真預覽文件（docx-preview 在 sandbox 文件內執行）；
+PowerPoint 檔（.pptx）是「PowerPoint 預覽 (內嵌)」與「PowerPoint 預覽 (全螢幕)」，
+以 `pptx-core.js`（AdoPptx）產出同樣「自帶渲染器」的投影片預覽（@aiden0z/pptx-renderer 在 sandbox 文件內執行）。
 
 ## 版本號規則
 
@@ -23,7 +25,7 @@ Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」
 - manifest 的 `description` 必須維持 132 字元以內（Chrome Web Store 限制）。
 - Tampermonkey 版本不在本 repo，位於 `~/projects/TampermonkeyUserscripts/src/AzureDevOpsHtmlPreview.user.js`；
   修改 `content.js` 的按鈕或內嵌邏輯時要同步更新它，並把它的 `@version` patch 版號加 1。
-  改到 `md-core.js` / `md-shell.js` / `md-theme.js` 或 `vendor/` 時，執行 `node scripts/build-userscript.mjs`
+  改到 `md-core.js` / `md-shell.js` / `md-theme.js`、`xlsx-core.js` / `docx-core.js` / `pptx-core.js`、`*-runtime.js` 或 `vendor/` 時，執行 `node scripts/build-userscript.mjs`
   把它們重新內嵌到 userscript 的標記區段（不用 @require：dev.azure.com 有 AMD 的 `define`，UMD 函式庫會掛不到 window）。
 
 ## 檔案說明
@@ -37,8 +39,10 @@ Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」
 | `xlsx-core.js` | xlsx（Excel 工作簿）→ 主題化的唯讀預覽文件（SheetJS 解析、樣式還原、多工作表頁籤、合併儲存格、欄寬列高、凍結窗格）；輸出完整 HTML 文件，內嵌（sandbox iframe）與全螢幕（sandbox 頁）共用 |
 | `docx-core.js` | docx（Word 文件）→「自帶渲染器」的高保真唯讀預覽文件（內容 base64 內嵌、docx-preview / JSZip 只在 sandbox 文件內執行、紙張語意）；內嵌與全螢幕共用 |
 | `docx-runtime.js` | 產生檔（`node scripts/build-docx-runtime.mjs`，請勿手改）：docx-preview / JSZip 的原始碼字串（AdoDocxLibs），只被寫進預覽文件內執行 |
+| `pptx-core.js` | pptx（PowerPoint 簡報）→「自帶渲染器」的投影片預覽文件（內容 base64 內嵌、windowed 清單、張數導覽、隱藏投影片標示、無法解碼圖片的佔位框、紙張語意）；內嵌與全螢幕共用 |
+| `pptx-runtime.js` | 產生檔（`node scripts/build-pptx-runtime.mjs`，請勿手改）：@aiden0z/pptx-renderer 轉成 classic script 的原始碼字串（AdoPptxLibs），只被寫進預覽文件內執行 |
 | `md-theme.js` | 預覽主題 CSS（`AdoMarkdownTheme.css`），用 CSS 變數定義 light / dark 兩套 token |
-| `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、SheetJS Community、mermaid、docx-preview 與 JSZip）；前四者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入；docx-preview / JSZip **不載入到頁面**——以原始碼字串打包進 `docx-runtime.js`、只在 sandbox 預覽文件內執行 |
+| `vendor/` | 第三方函式庫（marked、DOMPurify、highlight.js common build、SheetJS Community、mermaid、docx-preview 與 JSZip、`pptx-renderer/`）；前四者以 content script 載入，mermaid 列在 `web_accessible_resources`、只在文件含圖時才載入；docx-preview / JSZip / pptx-renderer **不載入到頁面**——以原始碼字串打包進 `docx-runtime.js` / `pptx-runtime.js`、只在 sandbox 預覽文件內執行。`pptx-renderer/` 保留上游原檔與授權檔（Apache-2.0、內含 MPL-2.0 的 mtx-decompressor），授權檔會隨商店 zip 打包 |
 | `background.js` | Service worker：把 HTML 暫存到 `chrome.storage.session`，再用 `chrome.windows.create` 開新視窗 |
 | `preview.html` / `preview.js` | 新視窗的外層頁面（一般 extension CSP），負責取出 HTML 並交給內層 sandbox；也負責就地換頁的頁次堆疊（`pages[k]`）與訊息中繼 |
 | `sandbox.html` | 列在 manifest `sandbox` 清單的頁面（origin 為 null），收到 `render` 訊息後整頁 `document.write`；就地換頁時外層把 iframe 導來 `sandbox.html?nav=N`，這一頁以 `ready(nav)` 取回該頁內容 |
@@ -60,6 +64,8 @@ Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」
      （docx 實測教訓：量到 TD 容器誤報 4.03:1，run 層才是檔案指定的白字）；判定依 WCAG：一般 4.5:1、
      大字／粗體 3:1。**來源檔案本身的低對比如實還原、回報註明**，不得擅自「修正」（違反紙張語意）；
      存疑時解剖來源檔 XML（如 word/document.xml 的 w:color / w:shd）當 ground truth 對照。
+     投影片的文字常疊在 SVG 形狀或圖片上（不是 DOM 祖先），要用截圖像素取背景；但 ego-lite 截圖有色彩管理偏移
+     （宣告 rgb(11,47,214) 截出 (22,46,206)，高彩度色偏更多），像素值只當近似、要對回 DOM 宣告色或來源 XML 判定。
   3. **深色與淺色都要親眼看到成品**：兩個主題各留一份證據（截圖或放大裁切圖）；只看過單一主題不算通過。
      實測教訓（v0.2.10）：只看淺色截圖就宣告「視覺 QA 通過」，漏掉深色模式「未指定字色吃主題白字 × 檔案淺色底」不可讀。
   4. **工具失效要明說**：截圖工具回傳快取／重複影像時不得拿它當證據（同一次連拍兩張相同 md5 即為警訊），改用
@@ -110,6 +116,19 @@ Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」
   `<script>` 內容一律過 `scriptSafe`（跳脫 `</script`）。`make test` 的 scripts/test-docx-core.mjs 驗證組裝
   （payload 逐位元回還原、跳脫、雙主題僅外殼不同）；渲染層依「視覺驗證」規範實測。
   `build-userscript.mjs` 把 docx-runtime.js 當 vendor（包裝後掛 `mdLibs.AdoDocxLibs`）、docx-core.js 當模組內嵌。
+- pptx（.pptx）預覽沿用 docx 的「自帶渲染器」設計，引擎是 @aiden0z/pptx-renderer（standalone 瀏覽器 ESM 版，已含 JSZip / ECharts）。
+  `scripts/build-pptx-runtime.mjs` 把它機械轉成 classic script（IIFE＋`'use strict'`、`import.meta.resolve` → undefined、
+  結尾 `export {…}` → `window.PptxRenderer`），每項轉換都斷言命中次數——升級 vendor 後腳本報錯就是轉換規則要跟著改。
+  同一支腳本另修補上游 bug：roundRect / round1Rect / snip1Rect 的 adj 依 ECMA-376 夾在 0–50000（上游沒夾，
+  adj 超標時膠囊形會畫成交叉弧線）；上游修正後命中次數歸零、腳本會報錯提醒移除修補。
+  bootstrap 固定 `pdfjs: false`（PDF.js 需要 eval / worker）、`externalMedia: 'block'`（預覽不對外連線）、
+  `zipLimits: RECOMMENDED_ZIP_LIMITS`、`lazyMedia` / `lazySlides` ＋ windowed 清單（24 MB、55 張實測：ADO 內首張約 12 秒含下載）。
+  渲染引擎在容器縮放時會**重建整份清單**：我們加在投影片項目上的標記（`data-xp-hidden`）要由 MutationObserver 補回；
+  隱藏投影片在 lazySlides 下尚未解析，改讀保留的 `sourceXml` 根元素 `show="0"`。
+  瀏覽器無法解碼的圖片（實測 TIFF）由文件層的 error 捕獲換成虛線框＋「無法顯示的圖片格式」（`<img>` 與 SVG `<image>` 都有）；
+  EMF / WMF 由引擎抽內嵌點陣預覽，沒有預覽時是「載入成功的空白圖」、不觸發 error，佔位框蓋不到。
+  ego-lite 的 CDP 不開放載入擴充功能：渲染層用 node 產出的預覽文件（`.pptx-test/`）以 file:// 實測，
+  內嵌路徑則在真的 ADO 分頁以 `page.evaluate` 注入 pptx-runtime / md-theme / pptx-core、照 `renderDocInline` 建 blob iframe 驗證 CSP。
 - 內嵌 iframe 載的是我們建立的 **blob: 文件**（不是 srcdoc）：就地換頁靠「iframe 導覽不同 blob: URL」建立歷史紀錄，
   瀏覽器上一頁 / 前進才會逐頁可用（實測反覆重設 srcdoc 不會留下可用的歷史，上一頁只會重讀目前內容）。
   blob 文件繼承 dev.azure.com 的 CSP（實測其 `frame-src` / `child-src` 允許 `blob:`，但擋 `chrome-extension:`），

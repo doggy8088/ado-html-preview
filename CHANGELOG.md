@@ -3,6 +3,25 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.3.2] – 2026-11-05 — 新增 PowerPoint（.pptx）預覽
+
+> 完整說明：[release-notes/v0.3.2.md](release-notes/v0.3.2.md)
+
+### 新功能
+
+- **PowerPoint（.pptx）預覽**：@aiden0z/pptx-renderer（Apache-2.0）高保真「自帶渲染器」，只在 sandbox 預覽文件內執行；
+  圖形、文字、圖片、表格、圖表、SmartArt 依原稿，投影片直向排列並標示張數與隱藏投影片。
+- 頂欄張數指示、上一張／下一張按鈕與鍵盤換張（← / → / PageUp / PageDown / Home / End）。
+- 大型簡報按需解壓縮與掛載（實測 24 MB、55 張，ADO 內首張約 12 秒含下載）；瀏覽器無法解碼的 TIFF 以虛線框標示。
+
+### 修正（渲染引擎上游 bug，於產生腳本修補）
+
+- roundRect / round1Rect / snip1Rect 的 adj 依 ECMA-376 夾在 0–50000（超標時膠囊形被畫成交叉弧線）。
+
+### 已知限制
+
+- 僅 .pptx；TIFF 圖片無法顯示、EMF / WMF 無內嵌點陣預覽時為空白；不播放動畫、轉場與影音；全螢幕受 10 MB 暫存上限（內嵌無此限）。
+
 ## [0.3.1] – 2026-11-05 — 修正商店打包清單（防漏包自我檢查）
 
 > 完整說明：[release-notes/v0.3.1.md](release-notes/v0.3.1.md)

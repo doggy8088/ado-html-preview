@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// 把 vendor 函式庫（marked / DOMPurify / highlight.js / SheetJS）與 md-core.js / md-shell.js / md-theme.js / xlsx-core.js
+// 把 vendor 函式庫（marked / DOMPurify / highlight.js / SheetJS）、渲染引擎原始碼字串（docx-runtime.js / pptx-runtime.js）
+// 與 md-core.js / md-shell.js / md-theme.js / xlsx-core.js / docx-core.js / pptx-core.js
 // 同步到 Tampermonkey 版本的 userscript。
 // 不用 @require：dev.azure.com 頁面有 AMD 的 define（VSS loader），UMD 函式庫會走 AMD 分支而不會掛到 window；
 // 這裡把函式庫包在遮蔽了 define / module / exports、並以 mdLibs 當 globalThis 的函式中執行，讓它們掛到 mdLibs 上。
@@ -19,12 +20,13 @@ const END = '// ---- END md modules ----';
 
 const vendors = [
   // [檔名, 執行後要從包裝函式帶出來的變數（IIFE 以 var 宣告的全域，如 hljs；window 匯出型的給 window.X）]
-  // docx-preview / JSZip 不在此列：它們只以原始碼字串形式內嵌（docx-runtime.js）、在 sandbox 預覽文件內執行
+  // docx-preview / JSZip / pptx-renderer 不在此列：它們只以原始碼字串形式內嵌（docx-runtime.js / pptx-runtime.js）、在 sandbox 預覽文件內執行
   ['vendor/marked.min.js', null],
   ['vendor/purify.min.js', null],
   ['vendor/highlight.min.js', 'hljs'],
   ['vendor/xlsx.full.min.js', null],
   ['docx-runtime.js', null], // 產生檔（docx-preview / JSZip 的原始碼字串）；同樣掛在 mdLibs 上
+  ['pptx-runtime.js', null], // 產生檔（@aiden0z/pptx-renderer 的原始碼字串）；同樣掛在 mdLibs 上
 ].map(([f, local]) => {
   const src = fs.readFileSync(path.join(root, f), 'utf8').trimEnd();
   const tail = local ? `\n        mdLibs.${local} = (typeof ${local} !== 'undefined' ? ${local} : window.${local});` : '';
@@ -34,7 +36,7 @@ const vendors = [
     `    (function (define, module, exports, globalThis, require) {\n${src}${tail}\n    }).call(mdLibs, undefined, undefined, undefined, mdLibs, undefined);`;
 });
 
-const modules = ['md-core.js', 'md-theme.js', 'md-shell.js', 'xlsx-core.js', 'docx-core.js'].map((f) => {
+const modules = ['md-core.js', 'md-theme.js', 'md-shell.js', 'xlsx-core.js', 'docx-core.js', 'pptx-core.js'].map((f) => {
   let src = fs.readFileSync(path.join(root, f), 'utf8').trimEnd();
   // 模組最後一行是 })(typeof globalThis !== 'undefined' ? globalThis : window); → 改成掛在 userscript 內的 mdLibs 物件上
   const tail = "})(typeof globalThis !== 'undefined' ? globalThis : window);";

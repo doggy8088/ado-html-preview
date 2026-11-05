@@ -17,11 +17,11 @@
 
 **zh-TW**
 
-在 Azure DevOps Repos 預覽 HTML（啟用 JavaScript）、Markdown、PDF、Excel 與 Word 文件，內嵌或全螢幕皆可。
+在 Azure DevOps Repos 預覽 HTML（啟用 JavaScript）、Markdown、PDF、Excel、Word 與 PowerPoint 文件，內嵌或全螢幕皆可。
 
 **en**
 
-Preview HTML (JavaScript enabled), Markdown, PDF, Excel and Word documents in Azure DevOps Repos, inline or full-screen.
+Preview HTML (JavaScript enabled), Markdown, PDF, Excel, Word and PowerPoint files in Azure DevOps Repos, inline or full-screen.
 
 ## 詳細說明（Description）
 
@@ -54,6 +54,9 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 
 ▶ Word 預覽 (內嵌) / Word 預覽 (全螢幕)
 開啟 .docx 檔時按鈕會變成 Word 預覽：以高保真版面還原原稿——字型樣式、表格框線與底色、頁首頁尾、圖片、分頁與頁面尺寸；配色跟著檔案（紙張語意）。
+
+▶ PowerPoint 預覽 (內嵌) / PowerPoint 預覽 (全螢幕)
+開啟 .pptx 檔時按鈕會變成 PowerPoint 預覽：投影片以高保真版面依序呈現——圖形、文字、圖片、表格、圖表與 SmartArt 依原稿；頂欄顯示目前張數，可用按鈕或鍵盤（← / → / PageUp / PageDown / Home / End）換張；大型簡報只渲染捲到附近的投影片。
 
 適合把專案文件、設計稿、靜態原型（含 JavaScript）直接放在 repo 裡，讓團隊在 Azure DevOps 內就能完整瀏覽。
 
@@ -90,6 +93,9 @@ On .xlsx files the buttons switch to an Excel preview: SheetJS parses the workbo
 ▶ Word preview (inline / full screen)
 On .docx files the buttons switch to a Word preview: the document renders with high-fidelity layout — run styles, table borders and fills, headers/footers, images, page breaks and page size preserved from the original.
 
+▶ PowerPoint preview (inline / full screen)
+On .pptx files the buttons switch to a PowerPoint preview: slides render in order with high fidelity — shapes, text, images, tables, charts and SmartArt preserved from the original. A slide counter, prev/next buttons and keyboard navigation (← / → / PageUp / PageDown / Home / End) are included; large decks only render the slides near the viewport.
+
 Ideal for keeping project docs, design mock-ups and static prototypes (with JavaScript) in the repo and browsing them fully inside Azure DevOps.
 
 No data collection, no analytics, no remote server. Source: https://github.com/doggy8088/ado-html-preview
@@ -124,7 +130,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 **單一用途（Single purpose）**
 
 ```
-在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現，Markdown 以更易讀的排版呈現，PDF 以 Chrome 內建的 PDF 檢視器呈現，Excel 以唯讀表格呈現，Word 以高保真版面呈現。
+在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現，Markdown 以更易讀的排版呈現，PDF 以 Chrome 內建的 PDF 檢視器呈現，Excel 以唯讀表格呈現，Word 與 PowerPoint 以高保真版面呈現。
 ```
 
 **權限理由（Permission justification）**
@@ -159,6 +165,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 6. 開啟任何 .pdf 檔案，按鈕變成「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，以 Chrome 內建的 PDF 檢視器顯示。
 7. 開啟任何 .xlsx 檔案，按鈕變成「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，以主題化的唯讀表格顯示（可用頁籤切換工作表）。
 8. 開啟任何 .docx 檔案，按鈕變成「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」，以高保真版面顯示（表格、頁首頁尾與圖片依原稿）。
+9. 開啟任何 .pptx 檔案，按鈕變成「PowerPoint 預覽 (內嵌)」與「PowerPoint 預覽 (全螢幕)」，投影片依原稿顯示（頂欄可換張）。
 若審核人員沒有 Azure DevOps 帳號，免費方案可於 https://azure.microsoft.com/services/devops/ 建立，建立 repo 後上傳任一含 <script> 的 HTML 即可測試。
 ```
 

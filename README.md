@@ -1,6 +1,6 @@
 # Azure DevOps HTML Preview
 
-Chrome 擴充功能：在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕，讓你以**啟用 JavaScript** 的方式完整預覽 repo 裡的 HTML 檔案、以**更美觀、支援深淺色**的排版預覽 Markdown 檔案、用 **Chrome 內建的 PDF 檢視器**預覽 PDF 檔案、以**主題化的唯讀表格**預覽 Excel（`.xlsx`）工作簿，並以**高保真版面**預覽 Word（`.docx`）文件。
+Chrome 擴充功能：在 Azure DevOps Repos 的檔案頁籤列加上兩顆按鈕，讓你以**啟用 JavaScript** 的方式完整預覽 repo 裡的 HTML 檔案、以**更美觀、支援深淺色**的排版預覽 Markdown 檔案、用 **Chrome 內建的 PDF 檢視器**預覽 PDF 檔案、以**主題化的唯讀表格**預覽 Excel（`.xlsx`）工作簿，並以**高保真版面**預覽 Word（`.docx`）文件與 PowerPoint（`.pptx`）簡報。
 
 Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔案裡的 `<script>` 全部不會執行，只能看到沒有互動的靜態畫面。這個擴充功能自己透過 Git REST API 抓原始檔，再放進**隔離的 sandbox** 重新渲染，腳本可以跑、頁面不能碰 Azure DevOps 的 cookie 或 session。
 
@@ -8,7 +8,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 功能
 
-開啟 `.html` / `.htm`、`.md` / `.markdown`、`.pdf`、`.xlsx` 或 `.docx` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
+開啟 `.html` / `.htm`、`.md` / `.markdown`、`.pdf`、`.xlsx`、`.docx` 或 `.pptx` 檔案時，**內嵌預覽會自動啟用**（不在 Preview 頁籤時會自動切過去），不必按按鈕。每個檔案（含分支）只自動觸發一次：手動切回 Contents 等頁籤後不會被強行拉回 Preview，切換檔案 / 分支時才會再次自動顯示；網址的 `_a` 指向 History / Blame 等頁籤時不搶走焦點。想重開預覽或換全螢幕時才用這兩顆按鈕：
 
 | 按鈕 | 行為 |
 | --- | --- |
@@ -48,6 +48,17 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 - 安全：渲染器與文件內容都在 sandbox 內執行，與 Azure DevOps 頁面完全隔離；內容中的 `</script>` 會被跳脫。
 - 已知限制：僅 `.docx`（舊 `.doc` 不支援）；追蹤修訂以合併結果顯示；字型未內嵌時以系統近似字型呈現。
 
+### PowerPoint 預覽
+
+開啟 `.pptx` 檔時，兩顆按鈕變成 **PowerPoint 預覽 (內嵌)** 與 **PowerPoint 預覽 (全螢幕)**：以 Git REST API 的二進位格式取回原始檔，產出**自帶渲染器**的高保真預覽文件（[@aiden0z/pptx-renderer](https://github.com/aiden0z/pptx-renderer)，Apache-2.0，只在 sandbox 文件內執行）。
+
+- 依原稿還原：圖形（含預設幾何與自訂路徑）、文字樣式、圖片、表格、圖表（ECharts）、SmartArt、群組、背景與漸層；投影片依序直向排列，下方標示張數，隱藏投影片會註明「隱藏投影片」。
+- 頂欄有目前張數與上一張／下一張按鈕，鍵盤 ← / → / PageUp / PageDown / Home / End 可換張（↑ / ↓ 保留一般捲動）。
+- 大型簡報：圖片用到才解壓縮、投影片捲到附近才解析與掛載（實測 24 MB、55 張的簡報：在 Azure DevOps 內從抓檔到第一張顯示約 12 秒，之後捲動按需載入）。
+- 配色採**紙張語意**（投影片跟著檔案、不隨深淺色主題改變）；頂欄與投影片之間的底色才跟隨主題。
+- 安全：渲染器與簡報內容都在 sandbox 內執行，與 Azure DevOps 頁面完全隔離；ZIP 解壓縮套用資源上限（防解壓縮炸彈）、封鎖外部媒體連結、不載入 PDF.js。
+- 已知限制：僅 `.pptx`（舊 `.ppt`、`.ppsx` / `.potx` 不支援）；瀏覽器無法解碼的 TIFF 圖片以虛線框標示「無法顯示的圖片格式」；EMF / WMF 向量圖只在檔案內含點陣預覽時顯示，否則為空白；不播放動畫、轉場與影音；簡報指定的字型未安裝時以系統近似字型呈現；全螢幕模式受 10 MB 暫存上限限制（內嵌模式無此限，大簡報請用內嵌）。
+
 ### PDF 預覽
 
 開啟 `.pdf` 檔時，兩顆按鈕變成 **PDF 預覽 (內嵌)** 與 **PDF 預覽 (全螢幕)**：以 Git REST API 的二進位格式取回原始檔，包成 `blob: application/pdf` 交給 **Chrome 內建的 PDF 檢視器**顯示，自帶搜尋、縮圖、列印與表單功能。
@@ -68,9 +79,9 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 
 ## 使用方式
 
-1. 在 Azure DevOps 打開任何 `.html` / `.htm`、`.md` / `.markdown`、`.pdf` 或 `.xlsx` 檔案（網址為 `https://dev.azure.com/{org}/{project}/_git/{repo}?path=/x.html`）。
-2. 內嵌預覽自動顯示（Markdown 檔是「Markdown 預覽」的排版，PDF 檔是 Chrome 內建的 PDF 檢視器，Excel 是唯讀表格）。
-3. 頁籤列右側另有「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，PDF 檔則是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，Excel 則是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」），可重開預覽或改用全螢幕。
+1. 在 Azure DevOps 打開任何 `.html` / `.htm`、`.md` / `.markdown`、`.pdf`、`.xlsx`、`.docx` 或 `.pptx` 檔案（網址為 `https://dev.azure.com/{org}/{project}/_git/{repo}?path=/x.html`）。
+2. 內嵌預覽自動顯示（Markdown 檔是「Markdown 預覽」的排版，PDF 檔是 Chrome 內建的 PDF 檢視器，Excel 是唯讀表格，Word / PowerPoint 是高保真版面）。
+3. 頁籤列右側另有「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，PDF 檔則是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，Excel 則是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，Word / PowerPoint 依此類推），可重開預覽或改用全螢幕。
 
 ## 安全設計
 
@@ -78,7 +89,7 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 - PDF 是唯一的例外：Chrome 內建 PDF 檢視器在 sandbox iframe 中載不起來，所以 PDF 的 iframe 不加 sandbox。
   PDF 由 PDFium 算繪、不執行 PDF 內嵌的 JavaScript，內容也不是 HTML，不會有網頁腳本的疑慮（見上方「PDF 預覽」）。
 - 擴充功能只在 `https://dev.azure.com/*` 注入，只向同一個 Azure DevOps 組織的 Git Items API 讀取你正在看的那個檔案（以及它以相對路徑引用的同 repo 資源）。
-- 所有函式庫（marked、DOMPurify、highlight.js、mermaid）都打包在擴充功能內，不從 CDN 載入。
+- 所有函式庫（marked、DOMPurify、highlight.js、mermaid、SheetJS、docx-preview、JSZip、@aiden0z/pptx-renderer）都打包在擴充功能內，不從 CDN 載入。
 - 不收集、不傳送任何資料到第三方，沒有分析、沒有遠端伺服器。詳見 [隱私權政策](docs/PRIVACY_POLICY.md)。
 
 ## 開發
@@ -89,7 +100,10 @@ content.js        注入 dev.azure.com：按鈕、內嵌預覽、全螢幕請求
 md-core.js        Markdown → HTML（marked + highlight.js + DOMPurify）
 md-shell.js       Markdown 預覽文件外殼與 iframe 內的 bootstrap（主題切換、目錄、複製、mermaid）
 md-theme.js       Markdown 預覽主題 CSS（light / dark）
-vendor/           marked、DOMPurify、highlight.js、mermaid
+xlsx-core.js      Excel → 唯讀表格預覽文件
+docx-core.js      Word → 自帶渲染器的預覽文件（docx-runtime.js 為產生檔）
+pptx-core.js      PowerPoint → 自帶渲染器的預覽文件（pptx-runtime.js 為產生檔）
+vendor/           marked、DOMPurify、highlight.js、mermaid、SheetJS、docx-preview、JSZip、pptx-renderer/
 background.js     Service worker：暫存 HTML 並開啟預覽視窗
 preview.html/js   預覽視窗外層頁
 sandbox.html      manifest sandbox 頁，實際渲染 HTML
@@ -106,4 +120,4 @@ scripts/package.sh 打包 zip
 
 ## 授權
 
-MIT
+MIT。第三方函式庫各依其授權（見 `vendor/`）；PowerPoint 渲染引擎 @aiden0z/pptx-renderer 為 Apache-2.0，內含 MPL-2.0 的 mtx-decompressor，授權全文在 `vendor/pptx-renderer/`。
