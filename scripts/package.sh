@@ -37,9 +37,11 @@ echo "packaged: $OUT"
 # （曾漏掉 xlsx-core / docx-core / docx-runtime / vendor-xlsx——殘缺 zip 送商店必被拒）
 # 註：vendor/pptx-renderer/ 的原始 ESM 檔不必打包——執行期只用 pptx-runtime.js（由它產生的原始碼字串）；
 #     但授權檔要隨附（Apache-2.0 要求附上授權；內含的 mtx-decompressor 為 MPL-2.0）
+# 清單先存起來再比對：`unzip | grep -q` 在 pipefail 下會因 grep 提早結束、unzip 收到 SIGPIPE 而隨機誤報缺漏
+ZIP_LIST="$(unzip -Z1 "$OUT")"
 MISSING=""
 for f in $(jq -r '[(.content_scripts[]?.js[]? // empty), (.web_accessible_resources[]?.resources[]? // empty), (.icons[]? // empty), (.background.service_worker? // empty), "_locales/en/messages.json", "_locales/zh_TW/messages.json"] | unique | .[]' manifest.json); do
-  unzip -Z1 "$OUT" | grep -qx "$f" || MISSING="$MISSING $f"
+  grep -qxF "$f" <<<"$ZIP_LIST" || MISSING="$MISSING $f"
 done
 if [ -n "$MISSING" ]; then
   echo "錯誤：zip 缺漏 manifest 引用的檔案:$MISSING" >&2
