@@ -17,11 +17,15 @@
 
 **zh-TW**
 
-在 Azure DevOps Repos 預覽 HTML（啟用 JavaScript）、Markdown、PDF、Excel、Word 與 PowerPoint 文件，內嵌或全螢幕皆可。
+在瀏覽器裡直接預覽 Azure DevOps Repos 的檔案：HTML 可執行 JavaScript，內嵌或全螢幕皆可。
 
 **en**
 
-Preview HTML (JavaScript enabled), Markdown, PDF, Excel, Word and PowerPoint files in Azure DevOps Repos, inline or full-screen.
+Preview files in your Azure DevOps Repos right in the browser: HTML runs with JavaScript, inline or full-screen.
+
+> 2026-11 修正：摘要原本列舉「HTML / Markdown / PDF / Excel / Word / PowerPoint」等格式，
+> 被 Chrome Web Store 以「關鍵字垃圾內容（Yellow Argon）」退件。摘要只描述單一用途，
+> 各格式的支援與細節放在下方詳細說明，請勿再把格式清單塞回摘要。
 
 ## 詳細說明（Description）
 
@@ -30,7 +34,7 @@ Preview HTML (JavaScript enabled), Markdown, PDF, Excel, Word and PowerPoint fil
 ```
 Azure DevOps Repos 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，檔案裡的 <script> 全部不會執行，你只能看到沒有互動的靜態畫面。
 
-Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…）右側加上兩顆按鈕：
+Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…）右側加上兩顆按鈕（內嵌與全螢幕各一）：
 
 ▶ 完整預覽 (內嵌)
 直接在原本的預覽區塊顯示完整網頁，高度填滿視窗；在其他頁籤按下會自動切到 Preview。
@@ -39,24 +43,24 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 開一個與目前視窗同尺寸的獨立視窗，讓使用者看到完整的網頁內容。
 
 兩種模式都會：
-• 透過 Azure DevOps Git REST API 讀取你正在看的那個檔案（使用你現有的登入狀態，不需要 PAT）
+• 透過 Azure DevOps 的 REST API 讀取你正在看的那個檔案（使用你現有的登入狀態，不需要額外的存取權杖）
 • 在沒有 allow-same-origin 的 sandbox 中渲染，網頁腳本碰不到 Azure DevOps 的 cookie 與 session
 • 修正預覽內的連結：#錨點正常跳轉、相對路徑在新分頁開啟 repo 內對應檔案、外部網址開新分頁
 
-▶ Markdown 預覽 (內嵌) / Markdown 預覽 (全螢幕)
-開啟 .md 檔時按鈕會變成 Markdown 預覽：針對中英混排調整的字型、行高與間距，深淺色主題（跟隨 Azure DevOps、可隨時切換），側邊目錄，表頭固定的長表格，程式碼語法上色與一鍵複製，mermaid 圖表，GitHub 風格的 [!NOTE] / [!WARNING] 提示區塊，repo 內的相對路徑圖片。
+▶ Markdown（.md）
+開啟 .md 檔時可切換成文章預覽：針對中英混排調整的字型、行高與間距，深淺色主題（跟隨 Azure DevOps、可隨時切換），側邊目錄，表頭固定的長表格，程式碼語法上色與一鍵複製，以文字繪製的圖表，[!NOTE] / [!WARNING] 提示區塊，repo 內的相對路徑圖片。
 
-▶ PDF 預覽 (內嵌) / PDF 預覽 (全螢幕)
-開啟 .pdf 檔時按鈕會變成 PDF 預覽：以二進位格式取回原始檔，用 Chrome 內建的 PDF 檢視器顯示，自帶搜尋、縮圖、列印與表單功能。不引入 PDF.js（它需要 eval，Azure DevOps 的 CSP 下只有全螢幕模式跑得動），內嵌與全螢幕都能用。
+▶ PDF（.pdf）
+開啟 .pdf 檔時可切換成 PDF 預覽：以二進位格式取回原始檔，用瀏覽器內建的檢視器顯示，自帶搜尋、縮圖、列印與表單功能。刻意不引入需要 eval 的第三方渲染函式庫（Azure DevOps 的 CSP 下只有全螢幕模式跑得動），內嵌與全螢幕都能用。
 
-▶ Excel 預覽 (內嵌) / Excel 預覽 (全螢幕)
-開啟 .xlsx 檔時按鈕會變成 Excel 預覽：以 SheetJS 解析後用自家主題的唯讀表格呈現——多工作表頁籤、儲存格樣式（粗體／字色／底色／對齊／自動換行）、數字格式、合併儲存格、欄寬列高、凍結窗格與欄字母／列號標頭。
+▶ 試算表（.xlsx）
+開啟 .xlsx 檔時可切換成唯讀表格預覽：以自家主題呈現——多工作表頁籤、儲存格樣式（粗體／字色／底色／對齊／自動換行）、數字格式、合併儲存格、欄寬列高、凍結窗格與欄字母／列號標頭。
 
-▶ Word 預覽 (內嵌) / Word 預覽 (全螢幕)
-開啟 .docx 檔時按鈕會變成 Word 預覽：以高保真版面還原原稿——字型樣式、表格框線與底色、頁首頁尾、圖片、分頁與頁面尺寸；配色跟著檔案（紙張語意）。
+▶ 文件（.docx）
+開啟 .docx 檔時可切換成高保真文件預覽：還原原稿的版面——字型樣式、表格框線與底色、頁首頁尾、圖片、分頁與頁面尺寸；配色跟著檔案（紙張語意）。
 
-▶ PowerPoint 預覽 (內嵌) / PowerPoint 預覽 (全螢幕)
-開啟 .pptx 檔時按鈕會變成 PowerPoint 預覽：投影片以高保真版面依序呈現——圖形、文字、圖片、表格、圖表與 SmartArt 依原稿；頂欄顯示目前張數，可用按鈕或鍵盤（← / → / PageUp / PageDown / Home / End）換張；大型簡報只渲染捲到附近的投影片。
+▶ 簡報（.pptx）
+開啟 .pptx 檔時可切換成投影片預覽：以高保真版面依序呈現——圖形、文字、圖片、表格、圖表與圖示化清單依原稿；頂欄顯示目前張數，可用按鈕或鍵盤（← / → / PageUp / PageDown / Home / End）換張；大型簡報只渲染捲到附近的投影片。
 
 適合把專案文件、設計稿、靜態原型（含 JavaScript）直接放在 repo 裡，讓團隊在 Azure DevOps 內就能完整瀏覽。
 
@@ -68,7 +72,7 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 ```
 The built-in Preview tab in Azure DevOps Repos renders HTML inside a CSP-restricted iframe, so every <script> in the file is blocked and you only get a static, non-interactive page.
 
-Azure DevOps HTML Preview adds two buttons to the file tab bar (Contents / Preview / History…):
+Azure DevOps HTML Preview adds two buttons to the file tab bar (Contents / Preview / History…), one for inline preview and one for full screen:
 
 ▶ Full preview (inline)
 Replaces the built-in preview area with the fully rendered page, sized to fill the window. Switches to the Preview tab automatically if needed.
@@ -77,24 +81,24 @@ Replaces the built-in preview area with the fully rendered page, sized to fill t
 Opens a separate window the same size as your current one so you can see the whole page.
 
 Both modes:
-• fetch the single file you are viewing through the Azure DevOps Git REST API, using your existing session (no PAT needed)
+• fetch the single file you are viewing through the Azure DevOps REST API, using your existing session (no personal access token needed)
 • render it in a sandbox without allow-same-origin, so page scripts cannot touch Azure DevOps cookies or sessions
 • fix links inside the preview: #anchors work, relative paths open the matching repo file in a new tab, external URLs open in a new tab
 
-▶ Markdown preview (inline / full screen)
-On .md files the buttons switch to a Markdown preview: typography tuned for mixed CJK and Latin text, light and dark themes (following Azure DevOps, switchable at any time), a side table of contents, long tables with sticky headers, syntax-highlighted code with one-click copy, mermaid diagrams, GitHub-style [!NOTE] / [!WARNING] alerts, and images referenced by relative path inside the repo.
+▶ Markdown (.md)
+Switch to a reading view: typography tuned for mixed CJK and Latin text, light and dark themes (following the site, switchable at any time), a side table of contents, long tables with sticky headers, syntax-highlighted code with one-click copy, diagrams drawn from text, [!NOTE] / [!WARNING] alerts, and images referenced by relative path inside the repo.
 
-▶ PDF preview (inline / full screen)
-On .pdf files the buttons switch to a PDF preview: the file is fetched in binary and shown with Chrome's built-in PDF viewer (search, thumbnails, print, forms). No PDF.js is bundled — it needs eval, which Azure DevOps's CSP blocks outside the full-screen mode — so both modes work.
+▶ PDF (.pdf)
+The file is fetched in binary and shown with the browser's built-in viewer (search, thumbnails, print, forms). No third-party rendering library is bundled — it needs eval, which the site's CSP blocks outside the full-screen mode — so both modes work.
 
-▶ Excel preview (inline / full screen)
-On .xlsx files the buttons switch to an Excel preview: SheetJS parses the workbook and it renders as a themed read-only grid — sheet tabs, cell styles (bold, colors, alignment, wrapping), number formats, merged cells, column widths, frozen panes, and Excel-style column/row headers.
+▶ Spreadsheets (.xlsx)
+The workbook renders as a themed read-only grid — sheet tabs, cell styles (bold, colors, alignment, wrapping), number formats, merged cells, column widths, frozen panes, and spreadsheet-style column/row headers.
 
-▶ Word preview (inline / full screen)
-On .docx files the buttons switch to a Word preview: the document renders with high-fidelity layout — run styles, table borders and fills, headers/footers, images, page breaks and page size preserved from the original.
+▶ Documents (.docx)
+The document renders with high-fidelity layout — run styles, table borders and fills, headers/footers, images, page breaks and page size preserved from the original.
 
-▶ PowerPoint preview (inline / full screen)
-On .pptx files the buttons switch to a PowerPoint preview: slides render in order with high fidelity — shapes, text, images, tables, charts and SmartArt preserved from the original. A slide counter, prev/next buttons and keyboard navigation (← / → / PageUp / PageDown / Home / End) are included; large decks only render the slides near the viewport.
+▶ Presentations (.pptx)
+Slides render in order with high fidelity — shapes, text, images, tables, charts and diagram-style lists preserved from the original. A slide counter, prev/next buttons and keyboard navigation (← / → / PageUp / PageDown / Home / End) are included; large decks only render the slides near the viewport.
 
 Ideal for keeping project docs, design mock-ups and static prototypes (with JavaScript) in the repo and browsing them fully inside Azure DevOps.
 
@@ -130,7 +134,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 **單一用途（Single purpose）**
 
 ```
-在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現，Markdown 以更易讀的排版呈現，PDF 以 Chrome 內建的 PDF 檢視器呈現，Excel 以唯讀表格呈現，Word 與 PowerPoint 以高保真版面呈現。
+在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現；.md 以更易讀的排版呈現；.pdf 以瀏覽器內建的檢視器呈現；.xlsx 以唯讀表格呈現；.docx 與 .pptx 以高保真版面呈現。
 ```
 
 **權限理由（Permission justification）**
@@ -162,7 +166,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 3. 點「完整預覽 (內嵌)」：預覽區塊會改為啟用 JavaScript 的完整網頁。
 4. 點「完整預覽 (全螢幕)」：開啟獨立視窗顯示完整網頁。
 5. 開啟任何 .md 檔案，按鈕變成「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，以擴充功能自己的排版主題顯示 Markdown（可在預覽右上角切換深淺色）。
-6. 開啟任何 .pdf 檔案，按鈕變成「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，以 Chrome 內建的 PDF 檢視器顯示。
+6. 開啟任何 .pdf 檔案，按鈕變成「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，以瀏覽器內建的 PDF 檢視器顯示。
 7. 開啟任何 .xlsx 檔案，按鈕變成「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，以主題化的唯讀表格顯示（可用頁籤切換工作表）。
 8. 開啟任何 .docx 檔案，按鈕變成「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」，以高保真版面顯示（表格、頁首頁尾與圖片依原稿）。
 9. 開啟任何 .pptx 檔案，按鈕變成「PowerPoint 預覽 (內嵌)」與「PowerPoint 預覽 (全螢幕)」，投影片依原稿顯示（頂欄可換張）。

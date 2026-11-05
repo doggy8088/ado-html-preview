@@ -4,7 +4,7 @@
     "description": "Extension name shown in Chrome and the Web Store."
   },
   "appDesc": {
-    "message": "Preview HTML (JavaScript enabled), Markdown, PDF, Excel, Word and PowerPoint files in Azure DevOps Repos, inline or full-screen.",
+    "message": "Preview files in your Azure DevOps Repos right in the browser: HTML runs with JavaScript, inline or full-screen.",
     "description": "Short description (max 132 characters)."
   }
 }

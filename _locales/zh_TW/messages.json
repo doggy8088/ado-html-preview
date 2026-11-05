@@ -4,7 +4,7 @@
     "description": "Chrome 與 Web Store 顯示的擴充功能名稱。"
   },
   "appDesc": {
-    "message": "在 Azure DevOps Repos 預覽 HTML（啟用 JavaScript）、Markdown、PDF、Excel、Word 與 PowerPoint 文件，內嵌或全螢幕皆可。",
+    "message": "在瀏覽器裡直接預覽 Azure DevOps Repos 的檔案：HTML 可執行 JavaScript，內嵌或全螢幕皆可。",
     "description": "簡短描述（最多 132 字元）。"
   }
 }
