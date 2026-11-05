@@ -109,8 +109,8 @@
 
   // 外殼樣式（token 與頂欄沿用 AdoMarkdownTheme.css；文件內容樣式由 docx-preview 依原稿產生）
   const XD_CSS = `
-.xd-meta{margin-left:auto;font-size:12px;color:var(--text-2,#605e5c);flex-shrink:0}
-#xd-status{padding:48px 16px;text-align:center;color:var(--text-2,#605e5c)}
+.xd-meta{margin-left:auto;font-size:12px;color:var(--fg-muted);flex-shrink:0}
+#xd-status{padding:48px 16px;text-align:center;color:var(--fg-muted)}
 #xd-status.xd-error{color:#a4262c}
 #xd-stage{padding:0}
 @media print{.md-bar,#xd-status{display:none}}

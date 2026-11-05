@@ -37,7 +37,14 @@ assert(light.startsWith('<!DOCTYPE html>'), '輸出為完整 HTML 文件');
 assert((light.match(/<script/g) || []).length === 3, '三個 script（JSZip＋docx-preview＋bootstrap）');
 assert((light.match(/nonce="TESTNONCE"/g) || []).length === 3, '三個 script 都帶 CSP nonce');
 assert(light.includes('data-theme="light"') && dark.includes('data-theme="dark"'), '外殼初始主題分深淺');
-assert(light.includes('.md-bar') && light.includes('--text'), '外殼主題 CSS（AdoMarkdownTheme）已內嵌（測試須載入 md-theme.js）');
+assert(light.includes('.md-bar') && light.includes('--fg-muted:'), '外殼主題 CSS（AdoMarkdownTheme）已內嵌（測試須載入 md-theme.js）');
+{
+  // docx-core 自己的外殼 CSS 引用的變數都要在主題定義：不存在時靜默退回 fallback 淺色值（v0.3.3 前的 --text-2）
+  const defined = new Set(global.AdoMarkdownTheme.css.match(/--[\w-]+(?=\s*:)/g) || []);
+  const used = [...new Set((fs.readFileSync(path.join(root, 'docx-core.js'), 'utf8').match(/var\(--[\w-]+/g) || []).map((v) => v.slice(4)))];
+  const undef = used.filter((v) => !defined.has(v));
+  assert(undef.length === 0, `docx-core.js 引用的 CSS 變數都在主題中定義${undef.length ? '（未定義：' + undef.join(' ') + '）' : ''}`);
+}
 
 console.log('== payload 完整性 ==');
 const m = light.match(/"payload":"([A-Za-z0-9+/=]+)"/);

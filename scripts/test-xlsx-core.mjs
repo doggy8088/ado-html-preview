@@ -100,7 +100,18 @@ assert(htmlLight.includes('&lt;esc&gt;') && !htmlLight.includes('<esc>'), '儲�
 assert(htmlLight.includes('role="tab"') && htmlLight.includes('role="tabpanel"'), '工作表頁籤具有無障礙角色');
 assert(htmlLight.includes('position:sticky;top:26px') && htmlLight.includes('position:sticky;left:48px'), '凍結窗格以 sticky 位移呈現');
 assert(htmlLight.includes('2 個工作表') && htmlLight.includes('data-theme="light"'), '頂欄統計與淺色初始主題');
-assert(htmlLight.includes('.md-bar') && htmlLight.includes('--text'), '外殼主題 CSS（AdoMarkdownTheme）已內嵌（測試須載入 md-theme.js）');
+assert(htmlLight.includes('.md-bar') && htmlLight.includes('--fg-muted:'), '外殼主題 CSS（AdoMarkdownTheme）已內嵌（測試須載入 md-theme.js）');
+{
+  // 外殼 CSS 引用的變數都要在主題定義：名稱不存在時靜默退回 fallback 淺色值，深色模式變白底（v0.3.3 前的頁籤列）
+  const themeCss = global.AdoMarkdownTheme.css;
+  const defined = new Set((themeCss.match(/--[\w-]+(?=\s*:)/g) || []));
+  const xsCss = htmlLight.slice(htmlLight.indexOf('.xs-meta{'));
+  const used = [...new Set((xsCss.match(/var\(--[\w-]+/g) || []).map((v) => v.slice(4)))];
+  const undef = used.filter((v) => !defined.has(v));
+  assert(used.length > 0 && undef.length === 0, `xs-* 樣式引用的 CSS 變數都在主題中定義（${used.join(' ')}${undef.length ? '；未定義：' + undef.join(' ') : ''}）`);
+  // 頁籤列是 .md-app flex 直欄的子項且 overflow-x:auto（最小高度 0）：沒有 flex:0 0 auto 時大表會把它擠成 0 高
+  assert(/\.xs-tabs\{[^}]*flex:0 0 auto/.test(htmlLight), '工作表頁籤列不可被壓縮（flex:0 0 auto）');
+}
 assert(htmlDark.includes('data-theme="dark"'), '深色初始主題');
 const htmlFull = AdoXlsx.buildDocument({ arrayBuffer: ab, fileName: 'x.xlsx', theme: 'dark', nonce: '' });
 assert(!htmlFull.includes('nonce="'), '全螢幕模式（nonce 為空）不寫 nonce 屬性');

@@ -3,6 +3,15 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.3.3] – 2026-11-05 — 修正 Excel 大表看不到工作表頁籤
+
+> 完整說明：[release-notes/v0.3.3.md](release-notes/v0.3.3.md)
+
+### 修正
+
+- **Excel 預覽**：資料量大的活頁簿，工作表頁籤列被擠成 0 高而無法切換工作表；頁籤列現在固定保留高度。
+- **深色模式**：Excel 頁籤列不再是白底；Excel 與 Word 頂欄的統計文字改用主題的次要文字色（原本引用了主題未定義的 CSS 變數，退回淺色值）。
+
 ## [0.3.2] – 2026-11-05 — 新增 PowerPoint（.pptx）預覽
 
 > 完整說明：[release-notes/v0.3.2.md](release-notes/v0.3.2.md)
