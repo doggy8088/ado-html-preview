@@ -13,6 +13,7 @@ Word 檔（.docx）是「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」
 以 `docx-core.js`（AdoDocx）產出「自帶渲染器」的高保真預覽文件（docx-preview 在 sandbox 文件內執行）；
 PowerPoint 檔（.pptx）是「PowerPoint 預覽 (內嵌)」與「PowerPoint 預覽 (全螢幕)」，
 以 `pptx-core.js`（AdoPptx）產出同樣「自帶渲染器」的投影片預覽（@aiden0z/pptx-renderer 在 sandbox 文件內執行）。
+另外，Boards 工作項目的附件預覽對話框遇到 HTML / Markdown 附件時，直接在對話框內顯示渲染後的內容（不是按鈕，自動套用）。
 
 ## 版本號規則
 
@@ -141,6 +142,14 @@ PowerPoint 檔（.pptx）是「PowerPoint 預覽 (內嵌)」與「PowerPoint 預
 - 打開支援的檔案時 `content.js` 的 `maybeAutoPreview()` 會自動顯示內嵌預覽：每個檔案 key（path + version）只自動觸發一次
   （避免 MutationObserver → render → mutation 的迴圈，也不在使用者切走頁籤後把他拉回 Preview），
   `_a` 指向 History / Blame 等非預覽頁籤、或分支尚未確定（version 為空）時不自動顯示；Tampermonkey 版要同步。
+- 工作項目附件預覽（`content.js` 的「工作項目附件」段落）：偵測 ADO 的附件預覽對話框（`.attachment-preview-modal-content`），
+  標題檔名是 `.html` / `.htm` / `.md` / `.markdown` 時，隱藏 React 管理的內容節點、在 `.attachment-preview-content` 內插入 sandbox iframe（blob: 文件、補 nonce），
+  標題列加「原始碼 / 預覽」切換鈕。對話框只有檔名：以 `/{org}/_apis/wit/workitems/{id}?$expand=relations` 取 `AttachedFile` 關聯、依 `attributes.name` 比對，
+  同名附件不只一份時抓回內容與 ADO 顯示的 `<pre>` 原始碼比對。工作項目 id 取自 `/_workitems/edit/{id}` 或 `?workitem={id}`。
+  狀態（`att`）與 repo 檔的內嵌預覽（`active`）**必須分開**：`reconcileInlinePreview()` 在非 repo 頁面會清掉 `active`。
+  原始碼檢視的大小來自 `.text-attachment-preview` 的 min/max 寬高，隱藏後容器會塌成 300×150，所以預覽時容器改成 `flex:1; align-self:stretch` 撐滿左右箭頭之間。
+  附件沒有目錄：不做相對路徑資源內嵌、不注入 `linkFixScript`（它需要 repo 資訊），改用 `attachmentLinkScript`（#錨點、外部連結開新分頁、Esc 轉給父頁面關閉對話框）。
+  實測方式：ego-browser 在真的工作項目頁以 `page.evaluate` 注入 vendor（暫時把 AMD 的 `window.define` 設為 undefined）＋ `md-*.js` ＋ content.js（stub `chrome.runtime`）。Tampermonkey 版要同步。
 - 改完程式後需到 `chrome://extensions` 重新載入擴充功能，並重新整理 Azure DevOps 頁面才會生效。
 - Markdown 預覽的 DOM 結構由 `md-shell.js` 決定、樣式只在 `md-theme.js`；改版面請先改 CSS，真的需要新元素再動 shell，並同步更新 Tampermonkey 版本（它把三個 md-*.js 內嵌在同一個檔案裡）。
 - Markdown 預覽的 iframe 取代的是 ADO 的 `.markdown-preview-container`（Markdown 沒有 srcdoc iframe）；ADO 的深色模式以 `body.ms-vss-web-vsts-theme-dark` 判斷，預覽文件的初始主題由此決定，之後可在預覽內切換。

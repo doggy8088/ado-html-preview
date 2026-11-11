@@ -1,8 +1,8 @@
 # Privacy Policy — Azure DevOps HTML Preview
 
-_Last updated: 2026-11-05_
+_Last updated: 2026-11-12_
 
-**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, Markdown files with an alternative layout, PDF files with Chrome's built-in PDF viewer, Excel (.xlsx) workbooks as read-only tables, and Word (.docx) documents and PowerPoint (.pptx) presentations with high-fidelity layout.
+**Azure DevOps HTML Preview** ("the extension") is a browser extension that renders HTML files stored in Azure DevOps Repos with JavaScript enabled, Markdown files with an alternative layout, PDF files with Chrome's built-in PDF viewer, Excel (.xlsx) workbooks as read-only tables, and Word (.docx) documents and PowerPoint (.pptx) presentations with high-fidelity layout. It also renders HTML and Markdown attachments of Azure Boards work items in the attachment preview dialog.
 
 ## Data collection
 
@@ -14,12 +14,13 @@ The extension does **not** collect, store, transmit, sell, or share any personal
 | --- | --- | --- |
 | Pages under `https://dev.azure.com/*` | To add the two preview buttons to the file tab bar and to replace the built-in preview area when you click "完整預覽 (內嵌)". | Nowhere. The page is only modified locally in your browser. |
 | The HTML, Markdown, PDF, Excel, Word or PowerPoint file you are currently viewing, plus same-repository files it references by relative path (scripts, stylesheets, images) | When you click a preview button, the extension requests those files from the same Azure DevOps organization's Git Items REST API, using your existing browser session. | The file content is held in memory and rendered in a frame (or, for PDFs, in Chrome's built-in PDF viewer). For the full-screen mode of HTML and Markdown it is briefly stored in `chrome.storage.session` (in-memory, cleared when the browser closes) only to pass it to the preview window, and is deleted as soon as the window reads it; PDFs are passed to the preview window as an in-memory blob URL instead. |
+| The HTML or Markdown work item attachment you open in Azure Boards' attachment preview dialog | To render the attachment instead of showing its source code, the extension reads the work item's attachment list and then that one attachment from the same Azure DevOps organization's Work Item Tracking REST API, using your existing browser session. | The attachment content is held in memory and rendered in a sandboxed frame inside the dialog. It is never stored. |
 
-The extension never requests any other repository content, never contacts any domain other than the Azure DevOps origin you are already using, and never writes anything to disk or to synced storage.
+The extension never requests any other repository content or attachments, never contacts any domain other than the Azure DevOps origin you are already using, and never writes anything to disk or to synced storage.
 
 ## Sandboxing
 
-HTML files, and the HTML generated from Markdown files, are rendered in frames that use the `sandbox` attribute **without** `allow-same-origin`. Scripts inside the previewed file run with a null origin and cannot read Azure DevOps cookies, local storage, or call Azure DevOps APIs with your credentials.
+HTML files and attachments, and the HTML generated from Markdown files and attachments, are rendered in frames that use the `sandbox` attribute **without** `allow-same-origin`. Scripts inside the previewed file run with a null origin and cannot read Azure DevOps cookies, local storage, or call Azure DevOps APIs with your credentials.
 
 Word and PowerPoint files are rendered by a bundled renderer that runs entirely inside the same kind of sandboxed frame; for PowerPoint, external media links inside the presentation are blocked, so previewing a file never contacts any other server.
 

@@ -62,6 +62,9 @@ Azure DevOps HTML Preview 在檔案頁籤列（Contents / Preview / History…�
 ▶ 簡報（.pptx）
 開啟 .pptx 檔時可切換成投影片預覽：以高保真版面依序呈現——圖形、文字、圖片、表格、圖表與圖示化清單依原稿；頂欄顯示目前張數，可用按鈕或鍵盤（← / → / PageUp / PageDown / Home / End）換張；大型簡報只渲染捲到附近的投影片。
 
+▶ 工作項目附件
+在 Boards 的工作項目點開 HTML 或 .md 附件時，附件預覽對話框直接顯示渲染後的網頁或 Markdown 文章（原本只顯示原始碼），標題列可隨時切回原始碼。
+
 適合把專案文件、設計稿、靜態原型（含 JavaScript）直接放在 repo 裡，讓團隊在 Azure DevOps 內就能完整瀏覽。
 
 不收集任何資料，沒有分析、沒有遠端伺服器。原始碼：https://github.com/doggy8088/ado-html-preview
@@ -100,6 +103,9 @@ The document renders with high-fidelity layout — run styles, table borders and
 ▶ Presentations (.pptx)
 Slides render in order with high fidelity — shapes, text, images, tables, charts and diagram-style lists preserved from the original. A slide counter, prev/next buttons and keyboard navigation (← / → / PageUp / PageDown / Home / End) are included; large decks only render the slides near the viewport.
 
+▶ Work item attachments
+Opening an HTML or .md attachment of an Azure Boards work item shows the rendered page or article in the attachment preview dialog (instead of only its source code); a header button switches back to the source at any time.
+
 Ideal for keeping project docs, design mock-ups and static prototypes (with JavaScript) in the repo and browsing them fully inside Azure DevOps.
 
 No data collection, no analytics, no remote server. Source: https://github.com/doggy8088/ado-html-preview
@@ -134,7 +140,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 **單一用途（Single purpose）**
 
 ```
-在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現；.md 以更易讀的排版呈現；.pdf 以瀏覽器內建的檢視器呈現；.xlsx 以唯讀表格呈現；.docx 與 .pptx 以高保真版面呈現。
+在 Azure DevOps Repos 的檔案頁面預覽使用者正在檢視的檔案：HTML 以啟用 JavaScript 的方式在隔離 sandbox 中呈現；.md 以更易讀的排版呈現；.pdf 以瀏覽器內建的檢視器呈現；.xlsx 以唯讀表格呈現；.docx 與 .pptx 以高保真版面呈現；工作項目的 HTML / .md 附件在附件預覽對話框中以同樣方式呈現。
 ```
 
 **權限理由（Permission justification）**
@@ -142,13 +148,13 @@ sips -z 800 1280 store-assets/screenshot-1.png
 | 權限 | 理由 |
 | --- | --- |
 | `storage` | 只使用 chrome.storage.session（記憶體、關閉瀏覽器即清除），在「全螢幕」模式把抓到的 HTML 交給預覽視窗，視窗讀取後立即刪除。不使用 local / sync storage。 |
-| 主機權限 `https://dev.azure.com/*` | 需要在 Azure DevOps 檔案頁注入按鈕，並以使用者現有的登入狀態向同一組織的 Git Items REST API 讀取使用者正在檢視的那一個檔案（及其相對路徑引用的同 repo 資源）。 |
+| 主機權限 `https://dev.azure.com/*` | 需要在 Azure DevOps 檔案頁注入按鈕，並以使用者現有的登入狀態向同一組織的 Git Items REST API 讀取使用者正在檢視的那一個檔案（及其相對路徑引用的同 repo 資源）；在工作項目的附件預覽對話框中，以 Work Item Tracking REST API 讀取使用者打開的那一份附件。 |
 
 **遠端程式碼（Remote code）**：選「是」，並填寫：
 
 ```
 本擴充功能本身的程式碼全部打包在套件內，不從任何遠端位置載入腳本。
-唯一會執行的「非套件內程式碼」是使用者自己放在其 Azure DevOps repo 裡、並主動按下預覽按鈕的那一個 HTML 檔案：它會被放進沒有 allow-same-origin 的 sandbox iframe（以及 manifest sandbox 頁）中渲染，這正是擴充功能的單一用途——讓使用者以啟用 JavaScript 的方式預覽自己的 HTML。該內容以 null origin 執行，無法存取擴充功能 API、Azure DevOps 的 cookie 或任何使用者資料，也不會被擴充功能的其他部分執行或信任。
+唯一會執行的「非套件內程式碼」是使用者自己放在其 Azure DevOps repo 裡、並主動按下預覽按鈕的那一個 HTML 檔案（或使用者在工作項目附件預覽對話框中主動打開的那一份 HTML 附件）：它會被放進沒有 allow-same-origin 的 sandbox iframe（以及 manifest sandbox 頁）中渲染，這正是擴充功能的單一用途——讓使用者以啟用 JavaScript 的方式預覽自己的 HTML。該內容以 null origin 執行，無法存取擴充功能 API、Azure DevOps 的 cookie 或任何使用者資料，也不會被擴充功能的其他部分執行或信任。
 ```
 
 > 審核風險提醒：MV3 原則上禁止遠端程式碼，官方文件只明確放行「在 sandbox iframe 中 eval 字串」這類情境，沒有直接寫明「使用者自有的 HTML」。此欄位務必誠實填寫並說明 sandbox 隔離；若被退件，可依退件信引用上述說明申訴，或在測試說明欄附上可公開存取的範例 repo。
@@ -170,6 +176,7 @@ sips -z 800 1280 store-assets/screenshot-1.png
 7. 開啟任何 .xlsx 檔案，按鈕變成「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，以主題化的唯讀表格顯示（可用頁籤切換工作表）。
 8. 開啟任何 .docx 檔案，按鈕變成「Word 預覽 (內嵌)」與「Word 預覽 (全螢幕)」，以高保真版面顯示（表格、頁首頁尾與圖片依原稿）。
 9. 開啟任何 .pptx 檔案，按鈕變成「PowerPoint 預覽 (內嵌)」與「PowerPoint 預覽 (全螢幕)」，投影片依原稿顯示（頂欄可換張）。
+10. 在 Boards 開啟任一工作項目，於 Attachments 上傳一個 .html 或 .md 檔並儲存，點附件名稱：附件預覽對話框直接顯示渲染後的內容，標題列的「原始碼」可切回原始碼檢視。
 若審核人員沒有 Azure DevOps 帳號，免費方案可於 https://azure.microsoft.com/services/devops/ 建立，建立 repo 後上傳任一含 <script> 的 HTML 即可測試。
 ```
 

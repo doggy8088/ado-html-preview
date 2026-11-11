@@ -70,6 +70,16 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 - 安全：PDF 由 PDFium 算繪、不執行 PDF 內嵌的 JavaScript，內容不是 HTML、也碰不到 Azure DevOps 的 cookie 或 session。
   也因此 PDF 的 iframe **不加 sandbox**（實測 sandbox 且無 `allow-same-origin` 會讓內建檢視器載不起來），這是 PDF 專屬的例外。
 
+### 工作項目附件預覽
+
+在 Boards 的工作項目（Work item）點開 `.html` / `.htm` 或 `.md` / `.markdown` 附件時，Azure DevOps 內建的附件預覽對話框只顯示原始碼；現在對話框會**直接顯示渲染後的內容**：
+
+- HTML 附件以啟用 JavaScript 的 sandbox 顯示完整網頁；Markdown 附件用與 repo 檔相同的 Markdown 預覽主題（深淺色、側邊目錄、程式碼上色、mermaid）。
+- 對話框標題列多一顆「原始碼」鈕，可切回 Azure DevOps 原本的原始碼檢視（再按一次回到預覽）；左右箭頭切換附件時自動跟著換。
+- 焦點在預覽內時按 Esc 一樣會關閉對話框。
+- 附件以工作項目 REST API 取得（`$expand=relations` 找附件網址，再以同源請求讀取內容）。
+- 已知限制：附件不在 repo 裡、沒有目錄，HTML / Markdown 內相對路徑的圖片、腳本、樣式表與文件連結無法解析（外部網址與 CDN 資源不受影響）；只支援已儲存的附件；目前只處理 HTML 與 Markdown，其他格式維持 Azure DevOps 原本的行為。
+
 同功能的 Tampermonkey 版本：[AzureDevOpsHtmlPreview.user.js](https://github.com/doggy8088/TampermonkeyUserscripts/raw/main/src/AzureDevOpsHtmlPreview.user.js)。
 
 ## 安裝
@@ -82,13 +92,14 @@ Azure DevOps 內建的 Preview 會把 HTML 放進被 CSP 限制的 iframe，檔�
 1. 在 Azure DevOps 打開任何 `.html` / `.htm`、`.md` / `.markdown`、`.pdf`、`.xlsx`、`.docx` 或 `.pptx` 檔案（網址為 `https://dev.azure.com/{org}/{project}/_git/{repo}?path=/x.html`）。
 2. 內嵌預覽自動顯示（Markdown 檔是「Markdown 預覽」的排版，PDF 檔是 Chrome 內建的 PDF 檢視器，Excel 是唯讀表格，Word / PowerPoint 是高保真版面）。
 3. 頁籤列右側另有「完整預覽 (內嵌)」與「完整預覽 (全螢幕)」（Markdown 檔則是「Markdown 預覽 (內嵌)」與「Markdown 預覽 (全螢幕)」，PDF 檔則是「PDF 預覽 (內嵌)」與「PDF 預覽 (全螢幕)」，Excel 則是「Excel 預覽 (內嵌)」與「Excel 預覽 (全螢幕)」，Word / PowerPoint 依此類推），可重開預覽或改用全螢幕。
+4. 在 Boards 的工作項目點開 `.html` / `.md` 附件，附件預覽對話框會直接顯示渲染後的內容；標題列的「原始碼」可切回原始碼檢視。
 
 ## 安全設計
 
 - 預覽 iframe 與 sandbox 頁都**沒有** `allow-same-origin`：網頁腳本跑在 null origin，無法讀取 Azure DevOps 的 cookie、localStorage 或呼叫 API。
 - PDF 是唯一的例外：Chrome 內建 PDF 檢視器在 sandbox iframe 中載不起來，所以 PDF 的 iframe 不加 sandbox。
   PDF 由 PDFium 算繪、不執行 PDF 內嵌的 JavaScript，內容也不是 HTML，不會有網頁腳本的疑慮（見上方「PDF 預覽」）。
-- 擴充功能只在 `https://dev.azure.com/*` 注入，只向同一個 Azure DevOps 組織的 Git Items API 讀取你正在看的那個檔案（以及它以相對路徑引用的同 repo 資源）。
+- 擴充功能只在 `https://dev.azure.com/*` 注入，只向同一個 Azure DevOps 組織的 Git Items API 讀取你正在看的那個檔案（以及它以相對路徑引用的同 repo 資源）；工作項目附件則以 Work Item Tracking API 讀取你在對話框中打開的那份附件。
 - 所有函式庫（marked、DOMPurify、highlight.js、mermaid、SheetJS、docx-preview、JSZip、@aiden0z/pptx-renderer）都打包在擴充功能內，不從 CDN 載入。
 - 不收集、不傳送任何資料到第三方，沒有分析、沒有遠端伺服器。詳見 [隱私權政策](docs/PRIVACY_POLICY.md)。
 
