@@ -36,8 +36,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (!msg || msg.type !== 'open-preview') return;
   (async () => {
+    let id = null;
     try {
-      const id = `preview_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      id = `preview_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       // tabId / info：之後 preview.js 要圖片時，據此請原本的 ADO 分頁用同一個檔案的位置去抓
       await chrome.storage.session.set({ [id]: { html: msg.html, title: msg.title, info: msg.info, tabId: sender?.tab?.id } });
       const bounds = await sourceBounds(sender);
@@ -49,6 +50,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
       sendResponse({ ok: true });
     } catch (e) {
+      // 視窗沒開成（或寫入失敗）：沒有 preview.js 會來取用並刪除這筆暫存，這裡清掉，
+      // 否則最多 9.5 MB 的 HTML 會一直佔著 chrome.storage.session 的 10 MB 配額
+      if (id) await chrome.storage.session.remove(id).catch(() => {});
       sendResponse({ ok: false, error: e?.message || String(e) });
     }
   })();

@@ -18,10 +18,26 @@
   // 換頁堆疊：第 k 頁的完整內容與檔案資訊。上一頁重新載入 sandbox.html?nav=k 時由這裡取回內容。
   const pages = [{ html: data.html, info: data.info }];
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  // 換頁失敗時的錯誤文件（像瀏覽器的錯誤頁）；sandbox.html 會照常描繪
-  const errorPage = (path, message) =>
+  // 換頁失敗時的錯誤文件（像瀏覽器的錯誤頁）；sandbox.html 會照常描繪。
+  // popup 視窗沒有工具列，錯誤頁也要有「← 上一頁」鈕（樣式與 content.js 的 linkFixScript 相同），
+  // 否則來源分頁關閉等失敗時就回不去了。sandbox 頁的 CSP 允許 inline script，不需要 nonce。
+  const backButton = (nav) => `<script>(function(){
+var b=document.createElement('button');
+b.type='button';
+b.title='上一頁（回到上一份文件）';
+b.textContent='←';
+b.setAttribute('style','position:fixed;top:10px;left:10px;z-index:2147483647;width:30px;height:30px;padding:0;border-radius:50%;border:1px solid rgba(0,0,0,.2);background:rgba(255,255,255,.85);color:#333;font:16px/1 system-ui,sans-serif;cursor:pointer;opacity:.45;box-shadow:0 1px 4px rgba(0,0,0,.2)');
+b.addEventListener('mouseenter',function(){b.style.opacity='1';});
+b.addEventListener('mouseleave',function(){b.style.opacity='.45';});
+b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();window.parent.postMessage({type:'ado-nav-back',from:${Number(nav) || 0}},'*');});
+document.body.appendChild(b);
+})();<\/script>`;
+  const errorPage = (path, message, nav) =>
     '<!DOCTYPE html><html><body style="font:14px/1.8 system-ui,sans-serif;color:#444;padding:24px">' +
-    `<h3 style="margin:0 0 8px;font-size:16px">無法載入 ${esc(path)}</h3><p style="margin:0">${esc(message)}</p></body></html>`;
+    `<h3 style="margin:0 0 8px;font-size:16px">無法載入 ${esc(path)}</h3><p style="margin:0">${esc(message)}</p>` +
+    (nav > 0 ? backButton(nav) : '') + '</body></html>';
+  // 就地換頁的世代編號：先點 A（很慢）再點 B（很快）時，A 晚完成不能蓋掉 B；按「← 上一頁」也取號以取消進行中的換頁
+  let navGen = 0;
 
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads');
@@ -31,7 +47,8 @@
     if (ev.source !== frame.contentWindow) return;
     const d = ev.data || {};
     if (d.type === 'ready') {
-      // 首次載入或上一頁 / 前進重新載入：把該頁次的內容交給 sandbox.html 描繪
+      // 首次載入或上一頁 / 前進重新載入：取消任何前頁未完成的換頁請求，再把該頁次的內容交給 sandbox.html 描繪
+      navGen++;
       const page = pages[d.nav] || pages[0];
       frame.contentWindow.postMessage({ type: 'render', html: page.html }, '*');
     } else if (d.type === 'title' && d.title) {
@@ -51,23 +68,22 @@
       const from = typeof d.from === 'number' ? d.from : pages.length - 1;
       const base = (pages[from] || pages[0]).info || {};
       const info = { ...base, path: d.path };
-      const fail = (message) => {
+      const gen = ++navGen;
+      const go = (html) => {
+        if (gen !== navGen) return; // 已有更新的換頁請求（或按了上一頁）：這次的結果作廢
         pages.length = from + 1;
-        pages.push({ html: errorPage(d.path, message), info });
+        pages.push({ html, info });
         frame.src = chrome.runtime.getURL(`sandbox.html?nav=${from + 1}`);
       };
+      const fail = (message) => go(errorPage(d.path, message, from + 1));
       chrome.runtime.sendMessage({ type: 'build-preview-doc', tabId: data.tabId, info, nav: from + 1, hash: d.hash || '' })
         .then((r) => {
-          if (r?.ok) {
-            pages.length = from + 1;
-            pages.push({ html: r.html, info });
-            frame.src = chrome.runtime.getURL(`sandbox.html?nav=${from + 1}`);
-          } else {
-            fail(r?.error || 'unknown');
-          }
+          if (r?.ok) go(r.html);
+          else fail(r?.error || 'unknown');
         }, (e) => fail(String(e?.message || e)));
     } else if (d.type === 'ado-nav-back') {
       // 與鍵盤上一頁走同一條歷史（iframe 的每個頁次都在這個視窗的共同歷史裡），不會多堆一筆
+      navGen++; // 取消還在組檔中的換頁
       history.back();
     } else if (d.type === 'ado-md-mermaid-request') {
       // Markdown 預覽要畫 mermaid 圖但 sandbox 內載不到檔案時，由這裡讀擴充功能內的 mermaid 再傳進去

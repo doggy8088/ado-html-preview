@@ -214,9 +214,15 @@
     return !!ref && !/^[a-z][a-z0-9+.-]*:/i.test(ref) && !ref.startsWith('//') && !ref.startsWith('#') && !ref.startsWith('data:');
   }
 
+  // 檔案所在的 repo 目錄（一律以 / 開頭、以 / 結尾）。網址的 path= 若漏了開頭的 /（?path=docs/x.md），
+  // 'https://repo.invalid' + 'docs/' 會變成主機名 repo.invaliddocs、整段目錄消失，所以先補上
+  function repoDir(path) {
+    return (path.startsWith('/') ? path : `/${path}`).replace(/[^/]*$/, '');
+  }
+
   // 把相對路徑換算成 repo 內的絕對路徑（處理 ../ 與 ./），並去掉 query / hash
   function resolveRepoPath(ref, info) {
-    const dir = info.path.replace(/[^/]*$/, '');
+    const dir = repoDir(info.path);
     const clean = ref.split('#')[0].split('?')[0];
     return decodeURIComponent(new URL(clean, 'https://repo.invalid' + dir).pathname);
   }
@@ -359,9 +365,10 @@
   // 點它與瀏覽器上一頁走同一條歷史（由父頁面呼叫 history.back()，見「就地換頁」段落）。
   function linkFixScript(info, nonce, nav, hash) {
     // JSON.stringify 不會跳脫 <，網址裡的路徑 / 分支名若含 </script> 會提前結束這段 script；統一改寫成 \u003c
+    // info.project / info.repo 是解碼後的名稱（可能含空白、中文），組網址時要各自編碼（與 rawUrl 一致）
     const cfg = JSON.stringify({
-      repoUrl: `${location.origin}/${info.org}/${info.project}/_git/${encodeURIComponent(info.repo)}`,
-      dir: info.path.replace(/[^/]*$/, ''),
+      repoUrl: `${location.origin}/${info.org}/${encodeURIComponent(info.project)}/_git/${encodeURIComponent(info.repo)}`,
+      dir: repoDir(info.path),
       version: info.version,
       nav,
       hash: hash || '',
@@ -495,8 +502,105 @@ scan(document.documentElement);
 })();<\/script>`;
   }
 
+  // ---------- HTML 標籤掃描（只認「真的標籤」） ----------
+  // 補 nonce、找 </body> 都不能用整份字串的 regex：JS 字串常值（"<script>…"、'</body>'）、註解、屬性值裡的
+  // 同樣字樣會被誤改，例如把 "<script>" 改成 "<script nonce="…">" 會在字串中插入未跳脫的引號，整段腳本 SyntaxError。
+  // 這裡依 HTML tokenizer 的規則逐一掃過標籤：略過註解、<!doctype> / <?…> / bogus comment、屬性值（含引號內的 >），
+  // 以及 script / style / textarea / title 等 raw text / RCDATA 元素的內容（直接跳到對應的結束標籤）。
+  // 原始字串不重新序列化，doctype、空白與作者的寫法完全保留。
+  // onTag({ end, name, start, nameEnd })：end＝結束標籤、name＝小寫標籤名、start＝'<' 的位置、nameEnd＝標籤名之後的位置。
+  // 限制：script 內的「double escaped」寫法（<!--<script>…</script>-->）視為一般內容，svg / math 內的 style / title 也一律當 raw text；
+  //       兩者在實務的預覽檔中不會遇到。
+  const RAW_TEXT_TAGS = new Set(['script', 'style', 'textarea', 'title', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript']);
+  const isAsciiAlpha = (ch) => !!ch && /^[a-z]$/i.test(ch);
+  const isHtmlSpace = (ch) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f';
+
+  function scanHtmlTags(html, onTag) {
+    const n = html.length;
+    let i = 0;
+    let foreign = 0; // <svg> / <math> 巢狀層數：只有在這兩者內，/> 才會真的自閉合（例如 <svg><title/></svg>）
+    while ((i = html.indexOf('<', i)) !== -1) {
+      if (html.startsWith('<!--', i)) {
+        // <!--> 與 <!---> 是空註解；其餘到 --> 為止（--!> 也算結尾），沒有結尾就到文件尾
+        if (html[i + 4] === '>') { i += 5; continue; }
+        if (html.startsWith('->', i + 4)) { i += 6; continue; }
+        const re = /--!?>/g;
+        re.lastIndex = i + 4;
+        const m = re.exec(html);
+        i = m ? m.index + m[0].length : n;
+        continue;
+      }
+      const next = html[i + 1];
+      if (next === '!' || next === '?' || (next === '/' && !isAsciiAlpha(html[i + 2]))) {
+        // <!doctype …>、<![CDATA[…]>、<?…>、</ 後面不是字母：都到下一個 > 為止
+        const gt = html.indexOf('>', i + 2);
+        i = gt < 0 ? n : gt + 1;
+        continue;
+      }
+      const end = next === '/';
+      const ns = i + (end ? 2 : 1);
+      if (!isAsciiAlpha(html[ns])) { i += 1; continue; } // "<" 後面不是字母：一般文字
+      let j = ns;
+      while (j < n && !isHtmlSpace(html[j]) && html[j] !== '/' && html[j] !== '>') j++;
+      const name = html.slice(ns, j).toLowerCase();
+      const nameEnd = j;
+      let selfClosing = false;
+      // 屬性：名稱、= 與值（引號內的 > 不結束標籤；未加引號的值到空白或 > 為止）
+      while (j < n && html[j] !== '>') {
+        if (isHtmlSpace(html[j])) { j++; continue; }
+        if (html[j] === '/') { selfClosing = html[j + 1] === '>'; j++; continue; }
+        selfClosing = false;
+        j++; // 屬性名的第一個字元（可以是 =）
+        while (j < n && !isHtmlSpace(html[j]) && html[j] !== '/' && html[j] !== '>' && html[j] !== '=') j++;
+        while (j < n && isHtmlSpace(html[j])) j++;
+        if (html[j] !== '=') continue;
+        j++;
+        while (j < n && isHtmlSpace(html[j])) j++;
+        const q = html[j];
+        if (q === '"' || q === "'") {
+          const k = html.indexOf(q, j + 1);
+          j = k < 0 ? n : k + 1;
+        } else {
+          while (j < n && !isHtmlSpace(html[j]) && html[j] !== '>') j++;
+        }
+      }
+      if (j >= n) break; // 標籤到文件尾都沒有 >：瀏覽器會整個丟棄，不算標籤
+      onTag({ end, name, start: i, nameEnd });
+      i = j + 1;
+      if (name === 'svg' || name === 'math') {
+        if (end) { if (foreign > 0) foreign--; } else if (!selfClosing) foreign++;
+        continue;
+      }
+      if (!end && name === 'plaintext') break;
+      if (!end && RAW_TEXT_TAGS.has(name) && !(foreign > 0 && selfClosing)) {
+        // 內容是純文字：跳到對應的結束標籤（</name 後接空白、/ 或 >），其間的 "<script" / "</body>" 都只是文字
+        const re = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi');
+        re.lastIndex = i;
+        const m = re.exec(html);
+        i = m ? m.index : n;
+      }
+    }
+  }
+
+  // 替每個真的 <script> 開始標籤補上 CSP nonce（緊接在標籤名之後；屬性重複時以第一個為準，所以作者原有的 nonce 不影響）
+  function addScriptNonce(html, nonce) {
+    if (!nonce) return html;
+    const at = [];
+    scanHtmlTags(html, (t) => { if (!t.end && t.name === 'script') at.push(t.nameEnd); });
+    let out = '';
+    let last = 0;
+    for (const p of at) {
+      out += html.slice(last, p) + ` nonce="${nonce}"`;
+      last = p;
+    }
+    return out + html.slice(last);
+  }
+
+  // 插在最後一個真的 </body> 結束標籤之前（沒有就接在文件尾）；用切片組字串，snippet 裡的 $& / $' 等不會被當成取代樣式
   function injectBeforeBodyEnd(html, snippet) {
-    return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, snippet + '</body>') : html + snippet;
+    let at = -1;
+    scanHtmlTags(html, (t) => { if (t.end && t.name === 'body') at = t.start; });
+    return at < 0 ? html + snippet : html.slice(0, at) + snippet + html.slice(at);
   }
 
   // 預覽文件尾端要注入的腳本：連結修正 + 圖片按需載入。
@@ -510,8 +614,8 @@ scan(document.documentElement);
   function finalizeDoc(html, info, nonce, nav = 0, hash = '') {
     // xlsx / docx / pptx 的唯讀文件已備妥帶 nonce 的 bootstrap（或自帶渲染器），也沒有需要修正的連結 / 圖片
     if (info.kind === 'xlsx' || info.kind === 'docx' || info.kind === 'pptx') return html;
-    // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上
-    const doc = info.kind === 'md' || !nonce ? html : html.replace(/<script\b/gi, `<script nonce="${nonce}"`);
+    // Markdown 預覽文件的 <script> 在 buildDocument 時已帶 nonce；HTML 檔則在這裡統一補上（只改真的 <script> 標籤）
+    const doc = info.kind === 'md' ? html : addScriptNonce(html, nonce);
     return injectBeforeBodyEnd(doc, previewScripts(doc, info, nonce, nav, hash));
   }
 
@@ -525,17 +629,22 @@ scan(document.documentElement);
   // 全螢幕模式由 preview.js 用 sandbox.html?nav=N 做同一件事（擴充功能頁面的 CSP 不允許 blob 文件跑 inline script）。
   let navInfos = []; // 第 k 份文件的 info（相對路徑資源以它為基準）；換頁時依 from 截斷
   let navUrls = [];  // 第 k 份文件的 blob URL
+  // 就地換頁的世代編號：同一個 iframe 的 contentWindow 換頁後仍是同一個物件，只比對 ev.source 擋不住
+  // 「先點 A（很慢）、再點 B（很快）」——A 晚完成時會蓋掉 B。每次請求取號，完成時不是最新的就放棄；
+  // 按「← 上一頁」或清掉內嵌預覽時也取號，取消還在組檔中的換頁。
+  let navGen = 0;
 
   function docBlobUrl(doc) {
     return URL.createObjectURL(new Blob([doc], { type: 'text/html' }));
   }
 
-  // 換頁失敗時的錯誤文件（像瀏覽器的錯誤頁，上一頁仍可回去）
-  function errorDocument(info, nav, message) {
+  // 換頁失敗時的錯誤文件（像瀏覽器的錯誤頁，上一頁仍可回去）。
+  // nonce 必須是頁面真正的 nonce：blob 文件繼承 dev.azure.com 的 CSP，沒帶 nonce 的「← 上一頁」腳本會被擋下。
+  function errorDocument(info, nonce, nav, message) {
     const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     const html = '<!DOCTYPE html><html><body style="font:14px/1.8 system-ui,sans-serif;color:#444;padding:24px">' +
       `<h3 style="margin:0 0 8px;font-size:16px">無法載入 ${esc(info.path)}</h3><p style="margin:0">${esc(message)}</p></body></html>`;
-    return injectBeforeBodyEnd(html, linkFixScript(info, '', nav, ''));
+    return injectBeforeBodyEnd(html, linkFixScript(info, nonce, nav, ''));
   }
 
   // 確保目前在 Preview 頁籤，並回傳 ADO 自己的預覽區塊：
@@ -742,6 +851,7 @@ scan(document.documentElement);
 
   function clearInlinePreview() {
     if (!active) return;
+    navGen++;
     active.frame.remove();
     if (active.docTab) active.docTab.remove(); // PDF 的自製 Preview 頁籤一起收掉
     if (active.old.isConnected) active.old.style.display = active.oldDisplay;
@@ -826,6 +936,7 @@ scan(document.documentElement);
     const d = ev.data;
     if (d?.type !== 'ado-nav-request' || typeof d.path !== 'string' || !ev.source) return;
     if (!active || ev.source !== active.frame.contentWindow) return;
+    const gen = ++navGen;
     const from = typeof d.from === 'number' ? d.from : navInfos.length - 1;
     const base = navInfos[from] || active.info;
     const info = { ...base, path: d.path, kind: kindOf(d.path) };
@@ -835,10 +946,10 @@ scan(document.documentElement);
     try {
       doc = finalizeDoc(await buildDocument(info, nonce), info, nonce, nav, d.hash || '');
     } catch (e) {
-      doc = errorDocument(info, nav, String(e?.message || e));
+      doc = errorDocument(info, nonce, nav, String(e?.message || e));
     }
-    // 抓檔期間使用者可能又換了檔案或又點了連結：只認同一個還在的 iframe
-    if (!active || ev.source !== active.frame.contentWindow) return;
+    // 抓檔期間使用者可能又換了檔案或又點了連結：只認最新一次請求、且同一個還在的 iframe
+    if (gen !== navGen || !active || ev.source !== active.frame.contentWindow) return;
     navInfos = navInfos.slice(0, from + 1); navInfos.push(info);
     navUrls = navUrls.slice(0, from + 1); navUrls.push(docBlobUrl(doc));
     active.frame.src = navUrls[nav];
@@ -850,6 +961,7 @@ scan(document.documentElement);
   window.addEventListener('message', (ev) => {
     if (ev.data?.type !== 'ado-nav-back' || !ev.source) return;
     if (!active || ev.source !== active.frame.contentWindow) return;
+    navGen++; // 取消還在組檔中的換頁
     history.back();
   });
 
@@ -868,8 +980,10 @@ scan(document.documentElement);
   // 每個檔案 key 只自動觸發一次，切換檔案 / 分支（key 改變）才會再自動顯示：
   //   - renderInline 會改動 DOM、觸發本檔底部的 MutationObserver，不去重會形成「自動預覽 → DOM 變動 → 又自動預覽」的迴圈
   //   - 使用者手動切回 Contents 等頁籤後不該被強行拉回 Preview；ADO 重建預覽區塊時同理，需要時按按鈕即可
-  let autoKey = null;        // 最後一次自動顯示（含嘗試失敗）的檔案 key
-  let autoRendering = false; // 自動顯示進行中：避免 renderInline 改 DOM 引發的 MutationObserver 重入
+  let autoKey = null;        // 最後一次自動顯示（含嘗試失敗、進行中）的檔案 key
+  // 不另設「自動顯示進行中」鎖：renderInline 改 DOM 引發的 MutationObserver 重入一律是同一個 key，已由 autoKey 擋下；
+  // 換了檔案（key 不同）就要立刻為新檔案自動顯示——舊的那次由 renderGen 作廢，不會蓋掉新預覽。
+  // （舊做法在前一次還在下載時直接 return，切到另一個檔案後若 DOM 已穩定、不再變動，新檔案就永遠不會自動預覽。）
 
   // 使用者明確停留在其他頁籤（History / Blame / Commit…）時不要搶走焦點；
   // 沒有 _a、_a=contents 或 _a=preview 則視為「打開檔案」，自動顯示預覽。
@@ -881,17 +995,15 @@ scan(document.documentElement);
   }
 
   function maybeAutoPreview(info) {
-    if (autoRendering || inOtherTab()) return;
+    if (inOtherTab()) return;
     // 版本選擇器還沒渲染時 version 為空，抓檔會落到 API 的預設分支（檔案不在預設分支時回 404）；
     // 等分支確定後的 MutationObserver 呼叫再自動顯示。網址帶 version= 時一開始就緒。
     if (!info.version) return;
     const key = previewKey(info);
     if (key === autoKey || (active && active.key === key)) { autoKey = key; return; }
     autoKey = key;
-    autoRendering = true;
     renderInline()
-      .catch((e) => console.warn('[Azure DevOps HTML Preview] 自動預覽失敗：', e))
-      .finally(() => { autoRendering = false; });
+      .catch((e) => console.warn('[Azure DevOps HTML Preview] 自動預覽失敗：', e));
   }
 
   // ---------- 2. 全螢幕（新視窗） ----------
@@ -1000,15 +1112,17 @@ scan(document.documentElement);
     };
   }
 
-  // 工作項目的附件清單（org 層級的 API 不需要專案名，看板 / 查詢對話框也適用）
+  // 工作項目的附件清單（org 層級的 API 不需要專案名，看板 / 查詢對話框也適用）。
+  // 取回後也同步存進 entry.list，reconcileAttachmentPreview 才能同步判斷檔名是否重複（見 attachmentKey）
   function attachmentRelations(id) {
     if (attRelations?.id !== id) {
       const org = location.pathname.split('/')[1];
-      const promise = fetch(`${location.origin}/${org}/_apis/wit/workitems/${id}?$expand=relations&api-version=7.1`, { credentials: 'include' })
+      const entry = { id, promise: null, list: null };
+      entry.promise = fetch(`${location.origin}/${org}/_apis/wit/workitems/${id}?$expand=relations&api-version=7.1`, { credentials: 'include' })
         .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-        .then((wi) => (wi.relations || []).filter((x) => x.rel === 'AttachedFile'));
-      attRelations = { id, promise };
-      promise.catch(() => { if (attRelations?.promise === promise) attRelations = null; });
+        .then((wi) => { entry.list = (wi.relations || []).filter((x) => x.rel === 'AttachedFile'); return entry.list; });
+      attRelations = entry;
+      entry.promise.catch(() => { if (attRelations === entry) attRelations = null; });
     }
     return attRelations.promise;
   }
@@ -1019,15 +1133,39 @@ scan(document.documentElement);
     return res.text();
   }
 
-  // shown()：ADO 對話框目前顯示的原始碼（只在同名附件不只一份時拿來比對）
+  // shown：ADO 對話框顯示的原始碼（只在同名附件不只一份時拿來比對）。取的是算 key 當下的值（見 attachmentKey），
+  // 組好的文件才會與 key 的指紋一致——抓檔期間使用者切到另一份同名附件也不會張冠李戴
   async function attachmentSource(id, name, shown) {
     const rels = (await attachmentRelations(id)).filter((x) => x.attributes?.name === name);
     if (!rels.length) throw new Error('找不到附件（可能尚未儲存工作項目）');
     if (rels.length === 1) return fetchAttachmentText(rels[0].url, name);
     const texts = await Promise.all(rels.map((x) => fetchAttachmentText(x.url, name)));
-    const cur = shown();
-    // HTML 解析會把 CRLF 正規化成 LF，比對前先統一
-    return (cur != null && texts.find((t) => t.replace(/\r\n?/g, '\n') === cur)) || texts[0];
+    const target = shown != null ? shown.replace(/\r\n?/g, '\n') : null;
+    // React 建立文字節點保留 CRLF、HTML 解析則正規化成 LF，兩端都統一成 LF 再比對
+    return (target != null && texts.find((t) => t.replace(/\r\n?/g, '\n') === target)) || texts[0];
+  }
+
+  // 原始碼的簡短指紋（長度＋FNV-1a 32-bit），只用來區分同名附件的 key
+  function textFingerprint(s) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return `${s.length}:${(h >>> 0).toString(36)}`;
+  }
+
+  // 對話框目前顯示的附件的 key（att、attDocs 快取與各狀態集合都以它為準）：
+  //   - 檔名在工作項目內唯一：`${id}|${name}`
+  //   - 同名附件不只一份：再加上 ADO 顯示的原始碼指紋。左右切換同名附件時 key 才會不同，
+  //     不會沿用上一份的預覽或 attDocs 快取；shown 是當下的原始碼，組檔時用它挑出對的那份
+  // 附件清單還沒取回（無法判斷是否重名），或重名但原始碼尚未顯示時回傳 null，等清單取回 / 下一次 DOM 變動再判斷。
+  function attachmentKey(id, p) {
+    const list = attRelations?.id === id ? attRelations.list : null;
+    if (!list) return null;
+    const base = `${id}|${p.name}`;
+    if (list.filter((x) => x.attributes?.name === p.name).length < 2) return { key: base, shown: null };
+    const pre = p.content.querySelector('pre');
+    if (!pre) return null;
+    const shown = pre.textContent.replace(/\r\n?/g, '\n');
+    return { key: `${base}|${textFingerprint(shown)}`, shown };
   }
 
   // 附件預覽文件裡的連結：附件沒有目錄，相對路徑無從解析（點了不動作）；
@@ -1054,8 +1192,7 @@ document.addEventListener('keydown',function(e){
   }
 
   function buildAttachmentDocument(kind, name, source, nonce) {
-    const doc = kind === 'md' ? markdownShell(source, name, nonce)
-      : nonce ? source.replace(/<script\b/gi, `<script nonce="${nonce}"`) : source;
+    const doc = kind === 'md' ? markdownShell(source, name, nonce) : addScriptNonce(source, nonce);
     return injectBeforeBodyEnd(doc, attachmentLinkScript(nonce));
   }
 
@@ -1154,9 +1291,25 @@ document.addEventListener('keydown',function(e){
     if (!p.content || !p.name) return; // React 重繪中，等下一次變動
     const id = workItemId();
     const kind = attKindOf(p.name);
-    const key = `${id}|${p.name}`;
+    const k = kind && id ? attachmentKey(id, p) : null;
+    const key = k ? k.key : null;
     if (att && (att.key !== key || att.content !== p.content || !att.frame.isConnected)) clearAttachmentPreview();
     if (!kind || !id) return;
+    if (!k) {
+      // 還不能判斷是哪一份附件：清單取回中，或重名但原始碼尚未顯示（等 DOM 變動）就先等；
+      // 清單還沒抓就先抓，回來後重新判斷。失敗記在 `${id}|${name}`，不在每次 DOM 變動時重試
+      const base = `${id}|${p.name}`;
+      if (attRelations?.id === id || attFailed.has(base)) return;
+      attachmentRelations(id).then(
+        () => reconcileAttachmentPreview(),
+        (e) => {
+          attFailed.add(base);
+          console.warn('[Azure DevOps HTML Preview] 附件預覽失敗：', e);
+          reconcileAttachmentPreview();
+        },
+      );
+      return;
+    }
     if (att) {
       ensureAttachmentToggle(p.actions);
       applyAttachmentMode();
@@ -1166,10 +1319,10 @@ document.addEventListener('keydown',function(e){
     if (url) { mountAttachmentFrame(p, key, kind, url); return; }
     if (attPending.has(key) || attFailed.has(key)) return;
     attPending.add(key);
-    const { name, content } = p;
+    const { name } = p;
     (async () => {
       try {
-        const source = await attachmentSource(id, name, () => content.querySelector('pre')?.textContent ?? null);
+        const source = await attachmentSource(id, name, k.shown);
         attDocs.set(key, docBlobUrl(buildAttachmentDocument(kind, name, source, getNonce())));
       } catch (e) {
         attFailed.add(key);
@@ -1241,6 +1394,6 @@ document.addEventListener('keydown',function(e){
     ensureButtons();
     reconcileAttachmentPreview();
   }
-  new MutationObserver(onDomChange).observe(document.body, { childList: true, subtree: true });
+  new MutationObserver(onDomChange).observe(document.body, { childList: true, subtree: true, characterData: true });
   onDomChange();
 })();
