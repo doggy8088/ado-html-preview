@@ -216,13 +216,13 @@
         const targets = new Map();
         for (const m of relsXml.matchAll(/<Relationship\b[^>]*>/g)) {
           const id = attr(m[0], 'Id'), target = attr(m[0], 'Target');
-          if (id && target) targets.set(id, resolvePart('xl/', target));
+          if (id && target) targets.set(id, target);
         }
         for (const m of wbXml.matchAll(/<(?:[\w-]+:)?sheet\b[^>]*>/g)) {
           const name = xmlDecode(attr(m[0], 'name') || '');
           const rm = /\s[\w-]+:id=(?:"([^"]*)"|'([^']*)')/.exec(m[0]);
           const rid = rm ? (rm[1] != null ? rm[1] : rm[2]) : null;
-          const xml = rid && targets.has(rid) ? read(targets.get(rid)) : null;
+          const xml = rid && targets.has(rid) ? readRelTarget(read, 'xl/', targets.get(rid)) : null;
           const entry = xml ? sheetEntry(xml) : null;
           out.list.push(entry);
           if (entry && !out.byName.has(name)) out.byName.set(name, entry);
@@ -312,6 +312,14 @@
       else if (p && p !== '.') outParts.push(p);
     }
     return outParts.join('/');
+  }
+
+  // 先依 OPC 規格對 base（xl/）解析（支援 worksheets/sheet2.xml 與 /xl/worksheets/sheet2.xml），
+  // 找不到時再相容非標準工具寫出的 xl/worksheets/...（漏前導 /）或 ../worksheets/...（誤以 xl/_rels/ 為基準）
+  function readRelTarget(read, base, target) {
+    const t = String(target || '').replace(/\\/g, '/');
+    return read(resolvePart(base, t))
+      || read('xl/' + resolvePart('', t.replace(/^(?:\/|(?:xl|\.\.|\.)\/)+/i, '')));
   }
 
   function parseSheet(XLSX, ws, name, ctx, styles, extra) {
@@ -426,15 +434,16 @@
     acc = GUTTER_W;
     for (let c = 0; c < sh.cols; c++) { colLeft.push(acc); acc += sh.colWidths[c]; }
 
-    let h = '<table class="xs-grid" style="width:' + acc + 'px">';
+    let h = '<table class="xs-grid">';
     h += '<colgroup><col style="width:' + GUTTER_W + 'px">';
     for (let c = 0; c < sh.cols; c++) h += '<col style="width:' + sh.colWidths[c] + 'px">';
     h += '</colgroup>';
     // 欄字母標頭（固定上方）；欄字母 / 列號依工作表座標（可見範圍不一定從 A1 開始）。
+    // 標頭設 min-width 搭配 .xs-grid{width:max-content}：寬文字只撐開自己的欄，不會壓縮列號欄或鄰欄；
     // 凍結區的標頭加 xs-frozen：z-index 高於一般標頭，水平 / 垂直捲動時一般標頭才不會蓋過它
     h += '<thead><tr style="height:' + HEAD_H + 'px"><th class="xs-corner" style="top:0;left:0"></th>';
     for (let c = 0; c < sh.cols; c++) {
-      h += '<th class="xs-colhead' + (c < fc ? ' xs-frozen' : '') + '" style="top:0' + (c < fc ? ';left:' + colLeft[c] + 'px' : '') + '">' + colName((sh.c0 || 0) + c) + '</th>';
+      h += '<th class="xs-colhead' + (c < fc ? ' xs-frozen' : '') + '" style="width:' + sh.colWidths[c] + 'px;min-width:' + sh.colWidths[c] + 'px;top:0' + (c < fc ? ';left:' + colLeft[c] + 'px' : '') + '">' + colName((sh.c0 || 0) + c) + '</th>';
     }
     h += '</tr></thead><tbody>';
 
@@ -480,6 +489,58 @@
       rootEl.setAttribute('data-theme', dark ? 'light' : 'dark');
       themeBtn.setAttribute('aria-label', dark ? '切換為深色' : '切換為淺色');
     });
+    // 凍結列 / 欄的 sticky 位移校正：寬文字或自動換行會讓實際欄寬 / 列高大於靜態估算值，
+    // 依標頭渲染出的實際尺寸重算累計座標，確保凍結區與鄰欄 / 鄰列零縫隙、零重疊
+    function px(n) { return Math.round(n * 100) / 100 + 'px'; }
+    function syncSticky(sec) {
+      if (!sec || sec.hidden) return;
+      var table = sec.querySelector('.xs-grid');
+      if (!table || !table.tHead || !table.tHead.rows.length || !table.tBodies.length) return;
+      var headRow = table.tHead.rows[0];
+      var headCells = headRow.cells;
+      var bodyRows = table.tBodies[0].rows;
+      var cols = headCells.length - 1;
+      if (cols <= 0 || !bodyRows.length) return;
+      var fc = 0, fr = 0;
+      while (fc < cols && headCells[fc + 1].classList.contains('xs-frozen')) fc++;
+      while (fr < bodyRows.length && bodyRows[fr].cells[0] && bodyRows[fr].cells[0].classList.contains('xs-frozen')) fr++;
+      if (!fc && !fr) return;
+      var colLeft = [];
+      var x = headCells[0].getBoundingClientRect().width;
+      for (var c = 0; c < fc; c++) {
+        colLeft.push(x);
+        headCells[c + 1].style.left = px(x);
+        x += headCells[c + 1].getBoundingClientRect().width;
+      }
+      var rowTop = [];
+      var y = headRow.getBoundingClientRect().height;
+      for (var r = 0; r < fr; r++) {
+        rowTop.push(y);
+        bodyRows[r].cells[0].style.top = px(y);
+        y += bodyRows[r].getBoundingClientRect().height;
+      }
+      var covered = Object.create(null);
+      var maxR = fc > 0 ? bodyRows.length : fr;
+      for (var r2 = 0; r2 < maxR; r2++) {
+        var cells = bodyRows[r2].cells;
+        var limitC = r2 < fr ? cols : fc;
+        for (var c2 = 0, ci = 1; c2 < limitC && ci < cells.length; c2++) {
+          if (covered[r2 + ':' + c2]) continue;
+          var td = cells[ci++];
+          var rs = td.rowSpan || 1, cs = td.colSpan || 1;
+          if (rs > 1 || cs > 1) {
+            for (var dr = 0; dr < rs; dr++) for (var dc = 0; dc < cs; dc++) {
+              if (dr || dc) covered[(r2 + dr) + ':' + (c2 + dc)] = 1;
+            }
+          }
+          if (r2 < fr) td.style.top = px(rowTop[r2]);
+          if (c2 < fc) td.style.left = px(colLeft[c2]);
+        }
+      }
+    }
+    function syncActive() {
+      syncSticky(document.querySelector('.xs-sheet:not([hidden])'));
+    }
     var tabs = [].slice.call(document.querySelectorAll('.xs-tab'));
     tabs.forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -489,8 +550,12 @@
           t.tabIndex = on ? 0 : -1;
           document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
         });
+        syncActive();
       });
     });
+    syncActive();
+    if (window.addEventListener) window.addEventListener('resize', syncActive);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncActive);
   }
 
   /**
@@ -563,13 +628,13 @@
 .xs-scroll{overflow:auto;flex:1 1 auto;min-height:0}
 .xs-notice{flex:0 0 auto;padding:8px 16px;font-size:12.5px;color:var(--fg-muted);background:var(--alert-warning-bg);border-bottom:1px solid var(--line)}
 .xs-empty{padding:48px 16px;text-align:center;color:var(--fg-muted)}
-.xs-grid{border-collapse:separate;border-spacing:0;font-size:13px;line-height:1.5}
+.xs-grid{width:max-content;padding:0;border-collapse:separate;border-spacing:0;font-size:13px;line-height:1.5}
 .xs-grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:2px 6px;white-space:pre;overflow:hidden;text-overflow:ellipsis;max-width:48em}
 .xs-grid tbody tr:hover td{box-shadow:inset 0 0 0 99em rgba(0,0,0,.045)}
 .xs-corner,.xs-colhead,.xs-rowhead{background:#f3f2f1;color:#605e5c;font-weight:400;font-size:11.5px;text-align:center;position:sticky;z-index:4;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
 .xs-colhead.xs-frozen,.xs-rowhead.xs-frozen{z-index:5}
 .xs-corner{z-index:6}
-.xs-rowhead{width:${GUTTER_W}px}
+.xs-corner,.xs-rowhead{width:${GUTTER_W}px;min-width:${GUTTER_W}px;max-width:${GUTTER_W}px}
 @media print{.xs-tabs,.md-bar{display:none}.md-main,.xs-scroll{overflow:visible}.xs-sheets,.xs-sheet{height:auto}}
 `;
 

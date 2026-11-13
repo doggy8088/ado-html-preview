@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +72,43 @@ console.log('== 工作表 XML 對應（workbook.xml + rels，內部檔名與頁�
 assert(s1.freeze.rows === 1 && s1.freeze.cols === 1 && model.sheets[1].freeze.rows === 0, '凍結窗格依 rels 對到正確的工作表（程式表 B2、Notes 無）');
 const s3 = model.sheets[2];
 assert(s3.freeze.rows === 4 && s3.freeze.cols === 3, `邊界表凍結窗格 D5（工作表座標 4 列 3 欄；實際 ${JSON.stringify(s3.freeze)}）`);
+{
+  // 非標準生成器常把 rels 的 Target 寫成 xl/worksheets/...（漏前導 /）或 ../worksheets/...（誤以 xl/_rels/ 為基準）：
+  // 改寫 ZIP 內的 workbook.xml.rels 逐一驗證（SheetJS 本身不認 ../worksheets/，以原 wb 搭配改寫後的 ZIP 測 rawSheetExtras）
+  const rewriteRels = (prefix) => {
+    const tmp = path.join(os.tmpdir(), 'ado-xlsx-rels-variant.xlsx');
+    execFileSync('python3', ['-c', `
+import re, sys, zipfile
+src, dst, pfx = sys.argv[1], sys.argv[2], sys.argv[3]
+with zipfile.ZipFile(src) as z:
+    items = [(i.filename, z.read(i.filename)) for i in z.infolist()]
+with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+    for name, data in items:
+        if name == "xl/_rels/workbook.xml.rels":
+            t = re.sub(r'Target="worksheets/(sheet\\d+\\.xml)"', lambda m: f'Target="{pfx}worksheets/{m.group(1)}"', data.decode("utf-8"))
+            data = t.encode("utf-8")
+        z.writestr(name, data)
+`, fixture, tmp, prefix]);
+    const b = fs.readFileSync(tmp);
+    fs.rmSync(tmp, { force: true });
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  };
+  const origRead = global.XLSX.read;
+  const cachedWb = origRead(ab, { type: 'array', cellStyles: true, cellNF: true, cellText: true, cellDates: false });
+  for (const [label, prefix, stubWb] of [
+    ['xl/worksheets/…（漏前導 /）', 'xl/', false],
+    ['/xl/worksheets/…（根路徑）', '/xl/', false],
+    ['../worksheets/…（相對路徑越界）', '../', true],
+  ]) {
+    const altAb = rewriteRels(prefix);
+    if (stubWb) global.XLSX.read = () => cachedWb;
+    let m;
+    try { m = AdoXlsx.parse(altAb); } finally { global.XLSX.read = origRead; }
+    const ok = m.sheets[0].freeze.rows === 1 && m.sheets[1].freeze.rows === 0 && m.sheets[2].freeze.rows === 4
+      && /background:#4472c4/.test(m.sheets[0].cells[0][0].css);
+    assert(ok, `rels Target="${prefix}worksheets/..." 仍正確對到各工作表樣式與凍結窗格（${label}）`);
+  }
+}
 
 console.log('== indexed 色（SheetJS 會掉前導零）／ indexed 填色 ==');
 assert(s3.r0 === 2 && s3.c0 === 2 && s3.rows === 6 && s3.cols === 4, `可見範圍 C3:F8（r0=${s3.r0} c0=${s3.c0} ${s3.rows}×${s3.cols}）`);
@@ -151,6 +189,52 @@ assert(htmlLight.includes('3 個工作表') && htmlLight.includes('data-theme="l
   assert(zBase > 0 && zFrozen > zBase && zCorner > zFrozen, `凍結標頭 z-index 高於一般標頭、低於左上角（${zBase} < ${zFrozen} < ${zCorner}）`);
   assert(/\.xs-sheets\{[^}]*height:100%/.test(htmlLight) && /\.xs-scroll\{[^}]*overflow:auto[^}]*flex:1 1 auto[^}]*min-height:0/.test(htmlLight),
     '.xs-sheets 撐滿 .md-main、.xs-scroll 是工作表的捲動容器（截斷提示不會跟著捲走）');
+  assert(!/<table class="xs-grid" style="width:/.test(htmlLight) && /\.xs-grid\{[^}]*width:max-content/.test(htmlLight),
+    '.xs-grid 用 width:max-content（不寫死總寬壓縮列號欄或鄰欄）');
+  assert(/\.xs-corner,\.xs-rowhead\{width:48px;min-width:48px;max-width:48px\}/.test(htmlLight) && /class="xs-colhead[^"]*" style="width:\d+px;min-width:\d+px;/.test(sec),
+    '列號欄鎖定 48px、欄標頭帶 min-width（寬文字只撐開自身欄，不擠壓列號欄造成凍結欄錯位）');
+  // 驗證 bootstrap 的 syncSticky：當凍結欄 / 凍結列被寬文字或換行撐大（如第 0 欄 96.5px、第 0 列 50.25px），
+  // 會依實際 getBoundingClientRect 重算後續凍結欄 / 列的 left / top（含跨欄列合併與切頁籤）
+  const cell = (w, h, frozen = false, rs = 1, cs = 1) => ({
+    rowSpan: rs, colSpan: cs, style: {},
+    classList: { contains: (k) => k === 'xs-frozen' && frozen },
+    getBoundingClientRect: () => ({ width: w, height: h }),
+  });
+  const hCells = [cell(48, 26), cell(96.5, 26, true), cell(70, 26, true), cell(64, 26, false)];
+  const r0Cells = [cell(48, 50.25, true), cell(166.5, 50.25, false, 1, 2), cell(64, 50.25, false)]; // 合併 c0..c1
+  const r1Cells = [cell(48, 24, true), cell(96.5, 48, false, 2, 1), cell(70, 24, false), cell(64, 24, false)]; // c0 跨兩列
+  const r2Cells = [cell(48, 24, false), cell(70, 24, false), cell(64, 24, false)]; // c0 被上一列覆蓋，cells[1] 是 c1！
+  const mkRow = (h, cells) => ({ cells, getBoundingClientRect: () => ({ width: 0, height: h }) });
+  const mockSec = {
+    hidden: true,
+    querySelector: (sel) => sel === '.xs-grid' ? {
+      tHead: { rows: [mkRow(26, hCells)] },
+      tBodies: [{ rows: [mkRow(50.25, r0Cells), mkRow(24, r1Cells), mkRow(24, r2Cells)] }],
+    } : null,
+  };
+  let tabClick = null;
+  const tab0 = { setAttribute: () => {}, getAttribute: () => 's0', addEventListener: () => {} };
+  const tab1 = { setAttribute: () => {}, getAttribute: () => 's1', addEventListener: (_, fn) => { tabClick = fn; } };
+  const sec0 = { hidden: false, querySelector: () => null };
+  const boot = htmlLight.slice(htmlLight.lastIndexOf('<script nonce="TESTNONCE">') + '<script nonce="TESTNONCE">'.length, htmlLight.lastIndexOf('</script>'));
+  vm.runInNewContext(boot, {
+    document: {
+      documentElement: { setAttribute: () => {}, getAttribute: () => 'light' },
+      querySelector: (sel) => sel === '.xs-sheet:not([hidden])' ? (!sec0.hidden ? sec0 : mockSec) : null,
+      querySelectorAll: (sel) => sel === '.xs-tab' ? [tab0, tab1] : [],
+      getElementById: (id) => id === 's0' ? sec0 : mockSec,
+    },
+    window: { addEventListener: () => {} },
+  });
+  tabClick(); // 切到第二個頁籤，觸發 syncSticky(mockSec)
+  assert(hCells[1].style.left === '48px' && hCells[2].style.left === '144.5px',
+    `syncSticky 依實測欄寬更新凍結欄標頭 left（預期 48px / 144.5px，實際 ${hCells[1].style.left} / ${hCells[2].style.left}）`);
+  assert(r0Cells[0].style.top === '26px' && r1Cells[0].style.top === '76.25px',
+    `syncSticky 依實測列高更新凍結列標頭 top（預期 26px / 76.25px，實際 ${r0Cells[0].style.top} / ${r1Cells[0].style.top}）`);
+  assert(r0Cells[1].style.left === '48px' && r0Cells[1].style.top === '26px'
+    && r1Cells[2].style.left === '144.5px' && r1Cells[2].style.top === '76.25px'
+    && r2Cells[1].style.left === '144.5px',
+    `syncSticky 正確跳過 rowspan/colspan 被覆蓋格並更新後續凍結格（r2 c1 left=${r2Cells[1].style.left}）`);
 }
 {
   console.log('== <script> 內 JSON 跳脫 ==');
