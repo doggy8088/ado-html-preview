@@ -5,7 +5,7 @@
 // sandbox 預覽文件內執行（渲染不可信 pptx 的程式與 Azure DevOps 頁面完全隔離）。
 //
 // 為什麼要轉換：預覽文件以 <script nonce> 內嵌（內嵌模式的 blob 文件繼承 dev.azure.com 的 CSP），
-// ES module 的 `export {…}` 與 `import.meta` 在 classic script 是語法錯誤。轉換只做三件事（另加一項上游 bug 修補，見下方），
+// ES module 的 `export {…}` 與 `import.meta` 在 classic script 是語法錯誤。轉換只做三件事（另加上游 bug 修補，見下方），
 // 且逐項斷言命中次數：
 //   1. 整份包進 IIFE（加 'use strict'：ES module 隱含 strict mode，語意要一致），避免頂層宣告污染預覽文件的全域
 //   2. `import.meta.resolve`（只用來自動尋找可選的 PDF.js；我們固定傳 pdfjs: false）→ undefined
@@ -37,6 +37,18 @@ const ADJ_FIXED = 'const r = Math.min(Math.max(ze(n, "adj", 16667), 0), 0.5), i 
   if (n !== 3) throw new Error(`adj 夾值修補：預期命中 3 次（roundRect / round1Rect / snip1Rect），實際 ${n} 次（vendor 版本改了？請檢查上游是否已修正）`);
   src = src.split(ADJ_LINE).join(ADJ_FIXED);
 }
+// 同類缺漏（雙調整值）：round2SameRect / round2DiagRect / snip2SameRect / snipRoundRect 的 adj1、adj2 也沒夾。
+// ECMA-376 presetShapeDefinitions 四者皆為 `a1 = pin 0 adj1 50000`、`a2 = pin 0 adj2 50000`
+// （上游同檔內嵌的 preset 定義資料亦同，可對照 name: "round2SameRect" 等的 calculatedGuides）。
+// ze() 回傳 adj / 100000，所以夾在 0–0.5。adj2 預設值 0 的三個與預設值 16667 的 snipRoundRect 分開斷言命中次數。
+const clampAdj = (name, def) => `Math.min(Math.max(ze(n, "${name}", ${def}), 0), 0.5)`;
+for (const [def2, expected, shapes] of [['0', 3, 'round2SameRect / round2DiagRect / snip2SameRect'], ['16667', 1, 'snipRoundRect']]) {
+  const line = `const r = ze(n, "adj1", 16667), i = ze(n, "adj2", ${def2}), a = Math.min(t, e) * r, o = Math.min(t, e) * i;`;
+  const fixed = `const r = ${clampAdj('adj1', 16667)}, i = ${clampAdj('adj2', def2)}, a = Math.min(t, e) * r, o = Math.min(t, e) * i;`;
+  const n = src.split(line).length - 1;
+  if (n !== expected) throw new Error(`adj1/adj2 夾值修補：預期命中 ${expected} 次（${shapes}），實際 ${n} 次（vendor 版本改了？請檢查上游是否已修正）`);
+  src = src.split(line).join(fixed);
+}
 
 // 2. import.meta（classic script 不允許）
 replaceOnce(/import\.meta\.resolve/, 'undefined', 'import.meta.resolve');
@@ -66,7 +78,8 @@ const block = `// ---- BEGIN pptx runtime（由 scripts/build-pptx-runtime.mjs �
 // 授權：@aiden0z/pptx-renderer 為 Apache-2.0（https://github.com/aiden0z/pptx-renderer）；內含的 mtx-decompressor
 // 為 MPL-2.0、JSZip 為 MIT、ECharts 為 Apache-2.0。全文見 vendor/pptx-renderer/LICENSE 與 THIRD_PARTY_NOTICES.md。
 // 只在 sandbox 預覽文件內執行；內容是 vendor 原樣，僅做 ESM → classic script 的機械轉換，
-// 外加一處修補（roundRect / round1Rect / snip1Rect 的 adj 依 ECMA-376 夾在 0–50000，見 scripts/build-pptx-runtime.mjs），
+// 外加修補（roundRect / round1Rect / snip1Rect 的 adj 與 round2SameRect / round2DiagRect / snip2SameRect / snipRoundRect
+// 的 adj1、adj2 依 ECMA-376 夾在 0–50000，見 scripts/build-pptx-runtime.mjs），
 // 對不可信的 pptx 而言渲染器與頁面完全隔離。
 (function (root) {
   'use strict';

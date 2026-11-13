@@ -13,6 +13,8 @@
 
   // <script> 內容安全化：把結束標籤拆開（字串／正則內的等價寫法），避免函式庫原始碼意外關閉 script
   const scriptSafe = (src) => String(src).replace(/<\/script/gi, '<\\/script');
+  // 放進 <script> 的 JSON：跳脫 '<'，字串裡的 </script> 或 <!-- 不會提早結束 / 改變 script 的解析
+  const jsonForScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 
   // ArrayBuffer → base64（分段轉以免超大陣列的參數上限）
   function toBase64(arrayBuffer) {
@@ -59,11 +61,14 @@
       '<text x="84" y="16.5" font-family="system-ui,-apple-system,sans-serif" font-size="13" fill="#605e5c" text-anchor="middle">' +
       '無法顯示的圖片格式</text></svg>');
     var SVG_NS = 'http://www.w3.org/2000/svg';
+    var XLINK_NS = 'http://www.w3.org/1999/xlink';
     document.addEventListener('error', function (ev) {
       var el = ev.target;
       if (!el || el.getAttribute == null || el.getAttribute('data-xp-broken')) return;
       var tag = (el.tagName || '').toLowerCase();
       if (tag !== 'img' && tag !== 'image') return;
+      // 已被渲染引擎移出 DOM 的節點（清單重建、lazy 卸載）：沒有父節點可插佔位框，也看不到，略過
+      if (tag === 'image' && !el.parentNode) return;
       el.setAttribute('data-xp-broken', '1');
       if (tag === 'img') {
         el.src = LABEL;
@@ -98,6 +103,8 @@
           el.setAttribute('width', String(lw));
           el.setAttribute('height', String(lh));
         }
+        // 渲染引擎以 xlink:href 指定圖片：先拿掉，避免同時保留壞掉的原始來源（href 與 xlink:href 並存時各瀏覽器取用不一）
+        if (el.hasAttributeNS && el.hasAttributeNS(XLINK_NS, 'href')) el.removeAttributeNS(XLINK_NS, 'href');
         el.setAttribute('href', LABEL);
       }
     }, true);
@@ -218,7 +225,7 @@
   </main>
 </div>
 <script${nonceAttr}>${scriptSafe(libs.pptxRenderer)}</script>
-<script${nonceAttr}>(${runtime.toString()})(${JSON.stringify(cfg)});</script>
+<script${nonceAttr}>(${runtime.toString()})(${jsonForScript(cfg)});</script>
 </body>
 </html>`;
   }
@@ -232,7 +239,7 @@
 .md-iconbtn:disabled{opacity:.4;cursor:default;background:transparent}
 .xp-main{background:var(--bg-sunken,#f3f2f1)}
 #xp-status{padding:48px 16px;text-align:center;color:var(--fg-muted,#605e5c)}
-#xp-status.xp-error{color:#a4262c}
+#xp-status.xp-error{color:var(--alert-caution-fg)}
 .xp-wrap{max-width:1280px;margin:0 auto;padding:24px 24px 4px}
 #xp-stage{counter-reset:xp-slide;color:#000;color-scheme:light}
 #xp-stage>[data-slide-index]{counter-increment:xp-slide;margin-bottom:28px!important}

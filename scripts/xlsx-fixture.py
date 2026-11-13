@@ -3,10 +3,12 @@
 涵蓋：粗體／斜體／字色／底色／對齊／自動換行、數字格式（日期、百分比、千分位）、
 合併儲存格、欄寬、列高、凍結窗格（B2）、兩個工作表、內嵌字串跳脫字元、
 以及「淺色底＋未指定字色」的格子（視覺驗證的對比檢查要盯的目標）。"""
+import re
 import sys
+import zipfile
 from datetime import date
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Color
 
 wb = Workbook()
 ws = wb.active
@@ -64,9 +66,48 @@ ws.column_dimensions["D"].width = 12
 ws.row_dimensions[3].height = 40
 ws.freeze_panes = "B2"
 
-ws2 = wb.create_sheet("Notes")
+ws2 = wb.create_sheet("Notes & 附註")
 ws2["A1"] = "Notes"
 ws2["A2"] = 42
 
-wb.save(sys.argv[1])
-print("wrote", sys.argv[1])
+# 第三張「邊界」：可見範圍不從 A1 開始（C3:F8）、凍結窗格要換算 r0 / c0、indexed 色（SheetJS 會掉前導零）、
+# indexed 填色（SheetJS 會整個丟掉）、有樣式的空白格（t: 'z'）、凍結區內的空白格（有樣式 / 無樣式）
+ws3 = wb.create_sheet("邊界")
+black = PatternFill("solid", fgColor=Color(indexed=8))
+navy = PatternFill("solid", fgColor=Color(indexed=18))
+ws3["C3"] = "紅字黑底"          # indexed 10 = FF0000（SheetJS rgb 'ff00' → CSS 會讀成透明的 #RGBA）
+ws3["C3"].font = Font(color=Color(indexed=10))
+ws3["C3"].fill = black
+ws3["D3"].fill = yellow         # 凍結列內、有樣式的空白格
+ws3["E3"] = "綠字黑底"          # indexed 11 = 00FF00（SheetJS 'ff00' 以外的另一種錯位 '0ff0'）
+ws3["E3"].font = Font(color=Color(indexed=11))
+ws3["E3"].fill = black
+ws3["F3"] = "黃字深藍底"        # indexed 13 = FFFF00（SheetJS 'ffff0'，無效的 5 位 hex）
+ws3["F3"].font = Font(color=Color(indexed=13))
+ws3["F3"].fill = navy
+# C4：凍結區內、完全沒有樣式的空白格（只靠表格層預設底色保持不透明）
+ws3["D4"] = "藍字"              # indexed 12 = 0000FF
+ws3["D4"].font = Font(color=Color(indexed=12))
+ws3["E6"].fill = blue           # 一般區、有樣式的空白格
+ws3["F8"] = "end"
+ws3.freeze_panes = "D5"         # 工作表座標：4 列 3 欄；可見區從 C3 起 → 2 列 1 欄
+
+out = sys.argv[1]
+wb.save(out)
+
+# 內部檔名與頁籤順序錯開（實務上移動 / 刪除過工作表的檔案常見）：
+# 程式表 → sheet3.xml、Notes → sheet1.xml、邊界 → sheet2.xml，workbook.xml.rels 改用相對路徑 Target
+rename = {"xl/worksheets/sheet1.xml": "xl/worksheets/sheet3.xml",
+          "xl/worksheets/sheet2.xml": "xl/worksheets/sheet1.xml",
+          "xl/worksheets/sheet3.xml": "xl/worksheets/sheet2.xml"}
+with zipfile.ZipFile(out) as z:
+    entries = [(i.filename, z.read(i.filename)) for i in z.infolist()]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for name, data in entries:
+        if name == "xl/_rels/workbook.xml.rels":
+            text = data.decode("utf-8")
+            text = re.sub(r'Target="/?(?:xl/)?(worksheets/sheet\d+\.xml)"',
+                          lambda m: 'Target="' + rename["xl/" + m.group(1)][3:] + '"', text)
+            data = text.encode("utf-8")
+        z.writestr(rename.get(name, name), data)
+print("wrote", out)

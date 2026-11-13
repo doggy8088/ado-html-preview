@@ -13,6 +13,8 @@
 
   // <script> 內容安全化：把結束標籤拆開（字串／正則內的等價寫法），避免函式庫原始碼意外關閉 script
   const scriptSafe = (src) => String(src).replace(/<\/script/gi, '<\\/script');
+  // 放進 <script> 的 JSON：跳脫 '<'，字串裡的 </script> 或 <!-- 不會提早結束 / 改變 script 的解析
+  const jsonForScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
 
   // ArrayBuffer → base64（分段轉以免超大陣列的參數上限）
   function toBase64(arrayBuffer) {
@@ -102,7 +104,7 @@
 </div>
 <script${nonceAttr}>${scriptSafe(libs.jszip)}</script>
 <script${nonceAttr}>${scriptSafe(libs.docxPreview)}</script>
-<script${nonceAttr}>(${runtime.toString()})(${JSON.stringify(cfg)});</script>
+<script${nonceAttr}>(${runtime.toString()})(${jsonForScript(cfg)});</script>
 </body>
 </html>`;
   }
@@ -111,8 +113,8 @@
   const XD_CSS = `
 .xd-meta{margin-left:auto;font-size:12px;color:var(--fg-muted);flex-shrink:0}
 #xd-status{padding:48px 16px;text-align:center;color:var(--fg-muted)}
-#xd-status.xd-error{color:#a4262c}
-#xd-stage{padding:0}
+#xd-status.xd-error{color:var(--alert-caution-fg)}
+#xd-stage{padding:0;color-scheme:light}
 @media print{.md-bar,#xd-status{display:none}}
 `;
 

@@ -69,6 +69,37 @@ console.log('== 渲染引擎 ==');
 assert(/renderAsync/.test(light) && /JSZip|jszip/i.test(light), '文件內含渲染引擎原始碼');
 assert(AdoDocx.toBase64(ab).length > 0, 'toBase64 可用（content script 測試亦會用到）');
 
+console.log('== 外殼配色：錯誤訊息對比（WCAG AA 4.5:1，深淺兩套 token 都要過） ==');
+{
+  // 錯誤狀態寫死顏色時只會在其中一個主題可讀（v0.4.1 前的 #a4262c 在深色底只有 2.27:1）：
+  // 規則必須引用主題 token，並以 md-theme.js 兩套 token 的實際值量對比（底色＝.md-main 的 --bg-surface）
+  const css = global.AdoMarkdownTheme.css;
+  const block = (sel) => { const i = css.indexOf(sel + ' {'); return i < 0 ? '' : css.slice(i, css.indexOf('}', i)); };
+  const tok = (b, name) => (new RegExp('--' + name + ':\\s*(#[0-9a-fA-F]{6})').exec(b) || [])[1];
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f((n >> 16) & 255) + 0.7152 * f((n >> 8) & 255) + 0.0722 * f(n & 255);
+  };
+  const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const rule = (/#xd-status\.xd-error\{color:([^};]+)/.exec(light) || [])[1] || '';
+  const v = (/^var\(--([\w-]+)\)$/.exec(rule.trim()) || [])[1];
+  assert(!!v, `錯誤訊息字色引用主題 token（實際 ${rule || '缺'}）`);
+  for (const [name, sel] of [['淺色', ':root'], ['深色', 'html[data-theme="dark"]']]) {
+    const fg = v && tok(block(sel), v), bg = tok(block(sel), 'bg-surface');
+    const r = fg && bg ? contrast(fg, bg) : 0;
+    assert(r >= 4.5, `${name}：錯誤訊息 ${fg} on ${bg} = ${r.toFixed(2)}:1 ≥ 4.5`);
+  }
+  assert(/#xd-stage\{[^}]*color-scheme:light/.test(light), '#xd-stage 宣告 color-scheme:light（文件內的表單控制項 / 捲軸維持紙張的淺色）');
+}
+
+console.log('== <script> 內 JSON 跳脫 ==');
+{
+  const x = AdoDocx.buildDocument({ arrayBuffer: ab, fileName: 'x.docx', theme: '</script><script>alert(1)</script><!--', nonce: '' });
+  assert(!x.includes('</script><script>alert(1)') && !x.includes('<!--'), "cfg JSON 內的 '<' 已跳脫為 \\u003c（不會關閉 script 標籤）");
+  assert(x.includes('\\u003c/script>\\u003cscript>alert(1)'), 'cfg 以 \\u003c 保留原值（JS 讀到的字串不變）');
+}
+
 fs.rmSync(fixture, { force: true });
 console.log(failed ? 'FAILED' : 'ALL PASS');
 process.exit(failed);

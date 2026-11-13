@@ -33,7 +33,8 @@ const model = AdoXlsx.parse(ab);
 
 console.log('== 解析 ==');
 console.log('工作表：', model.sheets.map((s) => s.name).join(' / '));
-assert(model.sheets.length === 2, '兩個工作表');
+assert(model.sheets.length === 3, '三個工作表');
+assert(model.sheets[1].name === 'Notes & 附註', `工作表名稱的 XML 實體已解碼（實際 ${JSON.stringify(model.sheets[1].name)}）`);
 const s1 = model.sheets[0];
 assert(s1.rows === 5 && s1.cols === 4, `sheet1 尺寸 5×4（實際 ${s1.rows}×${s1.cols}）`);
 assert(!s1.truncated, 'sheet1 未觸發截斷');
@@ -64,16 +65,49 @@ assert(C5.text === 'TRUE', '布林值');
 assert(String(D5.text).includes('#N/A'), '錯誤值');
 assert(model.sheets[1].cells[1][0].text === '42', 'sheet2 數值');
 
+console.log('== 工作表 XML 對應（workbook.xml + rels，內部檔名與頁籤順序錯開） ==');
+// 測試檔把 程式表 → sheet3.xml、Notes → sheet1.xml、邊界 → sheet2.xml：以 sheetN 編號對應時，
+// 上面 A1 的樣式斷言與下面的凍結窗格都會對錯表
+assert(s1.freeze.rows === 1 && s1.freeze.cols === 1 && model.sheets[1].freeze.rows === 0, '凍結窗格依 rels 對到正確的工作表（程式表 B2、Notes 無）');
+const s3 = model.sheets[2];
+assert(s3.freeze.rows === 4 && s3.freeze.cols === 3, `邊界表凍結窗格 D5（工作表座標 4 列 3 欄；實際 ${JSON.stringify(s3.freeze)}）`);
+
+console.log('== indexed 色（SheetJS 會掉前導零）／ indexed 填色 ==');
+assert(s3.r0 === 2 && s3.c0 === 2 && s3.rows === 6 && s3.cols === 4, `可見範圍 C3:F8（r0=${s3.r0} c0=${s3.c0} ${s3.rows}×${s3.cols}）`);
+const E = (a1) => { const m = /^([A-Z])(\d+)$/.exec(a1); return s3.cells[+m[2] - 1 - s3.r0][m[1].charCodeAt(0) - 65 - s3.c0]; };
+assert(/color:#ff0000;/.test(E('C3').css) && /background:#000000/.test(E('C3').css), `indexed 10 字色 = #ff0000、indexed 8 填色 = #000000（實際 ${E('C3').css}）`);
+assert(/color:#00ff00;/.test(E('E3').css), `indexed 11 字色 = #00ff00（SheetJS 給 '0ff0'；實際 ${E('E3').css}）`);
+assert(/color:#ffff00;/.test(E('F3').css) && /background:#000080/.test(E('F3').css), `indexed 13 字色 = #ffff00、indexed 18 填色 = #000080（實際 ${E('F3').css}）`);
+assert(/color:#0000ff;/.test(E('D4').css), `indexed 12 字色 = #0000ff（實際 ${E('D4').css}）`);
+
+console.log('== 空白格 ==');
+assert(E('D3') && E('D3').text === '' && /background:#fff2cc/.test(E('D3').css), '凍結列內有樣式的空白格保留填色（不再當成無資料略過）');
+assert(E('E6') && E('E6').text === '' && /background:#4472c4/.test(E('E6').css), "有樣式的空白格（t: 'z'）保留填色");
+assert(E('C4') === null, '完全沒樣式的空白格不輸出 inline 樣式（交給表格層預設配色）');
+
 console.log('== 視覺驗證：紙張語意 ==');
 const htmlLight = AdoXlsx.buildDocument({ arrayBuffer: ab, fileName: '測試.xlsx', theme: 'light', nonce: 'TESTNONCE' });
 const htmlDark = AdoXlsx.buildDocument({ arrayBuffer: ab, fileName: '測試.xlsx', theme: 'dark', nonce: 'TESTNONCE' });
-const tdStyles = (html) => (html.match(/<td[^>]*style="[^"]*"/g) || []).map((s) => s.slice(s.indexOf('style="') + 7, -1));
-const lightStyles = tdStyles(htmlLight);
-const darkStyles = tdStyles(htmlDark);
-assert(lightStyles.length > 0 && lightStyles.length === darkStyles.length, `深淺色建置的 <td> 數量一致（${lightStyles.length}）`);
+// 每個 <td>（含沒有 style 屬性的空白格）都要算進來：沒有 inline 色的格子吃表格層的預設規則（.xs-grid td{color;background}），
+// 先前只抓帶 style 的 <td>，空白格的缺色會被靜默略過
+const tds = (html) => [...html.matchAll(/<td\b([^>]*)>([\s\S]*?)<\/td>/g)].map((m) => ({ style: (/style="([^"]*)"/.exec(m[1]) || [])[1] || '', text: m[2] }));
+const baseRule = (html) => /\.xs-grid td\{color:(#[0-9a-f]{6});background:(#[0-9a-f]{6})\}/.exec(html);
+const lightTds = tds(htmlLight);
+const darkTds = tds(htmlDark);
+const lightStyles = lightTds.map((t) => t.style);
+const darkStyles = darkTds.map((t) => t.style);
+assert(lightTds.length > 0 && lightTds.length === darkTds.length, `深淺色建置的 <td> 數量一致（${lightTds.length}，含 ${lightTds.filter((t) => !t.style).length} 個無 inline 樣式的空白格）`);
 assert(JSON.stringify(lightStyles) === JSON.stringify(darkStyles), '所有 <td> 樣式在深 / 淺色建置完全一致（配色跟著檔案，不跟主題）');
-assert(lightStyles.every((s) => /color:#[0-9a-f]{6}/.test(s)), '每個 <td> 都有顯式字色（含預設值）');
-assert(lightStyles.every((s) => /background:#[0-9a-f]{6}/.test(s)), '每個 <td> 都有顯式底色（含預設值）');
+const baseL = baseRule(htmlLight), baseD = baseRule(htmlDark);
+assert(!!baseL && !!baseD && baseL[0] === baseD[0], `表格層預設配色存在且深淺一致（${baseL ? baseL[0] : '缺'}）`);
+const effective = (t) => ({
+  fg: (t.style.match(/(?:^|;)color:(#[0-9a-f]{6})/) || [])[1] || (baseL && baseL[1]),
+  bg: (t.style.match(/background:(#[0-9a-f]{6})/) || [])[1] || (baseL && baseL[2]),
+});
+assert(lightTds.every((t) => effective(t).fg), '每個 <td> 都有顯式字色（inline 或表格層預設，含預設值）');
+assert(lightTds.every((t) => effective(t).bg), '每個 <td> 都有顯式底色（inline 或表格層預設，含預設值）');
+assert(!lightStyles.some((s) => /#[0-9a-f]{3,5}(?![0-9a-f])/i.test(s)), '沒有 3–5 位數的 hex 色（#RGB / #RGBA 會讀成別的顏色或透明）');
+assert(lightTds.filter((t) => /position:sticky/.test(t.style)).every((t) => effective(t).bg), '凍結格都有不透明底色（捲動內容不會透出來）');
 
 console.log('== 視覺驗證：對比（WCAG AA 4.5:1） ==');
 const lum = (hex) => {
@@ -83,11 +117,11 @@ const lum = (hex) => {
 };
 const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 let min = { ratio: Infinity, style: '' };
-for (const s of lightStyles) {
-  const fg = (s.match(/color:(#[0-9a-f]{6})/) || [])[1];
-  const bg = (s.match(/background:(#[0-9a-f]{6})/) || [])[1];
+for (const t of lightTds) {
+  if (!t.text) continue; // 空白格沒有文字，對比無意義
+  const { fg, bg } = effective(t);
   const ratio = contrast(fg, bg);
-  if (ratio < min.ratio) min = { ratio, style: s };
+  if (ratio < min.ratio) min = { ratio, style: t.style || '(表格層預設)' };
 }
 console.log(`  最低對比 ${min.ratio.toFixed(2)}:1 — ${min.style}`);
 assert(min.ratio >= 4.5, `所有儲存格前景/背景對比 ≥ 4.5:1（最低 ${min.ratio.toFixed(2)}）`);
@@ -99,7 +133,31 @@ assert(htmlLight.includes('colspan="4"') && !htmlLight.includes('rowspan="2"'), 
 assert(htmlLight.includes('&lt;esc&gt;') && !htmlLight.includes('<esc>'), '儲存格文字已 HTML 轉義');
 assert(htmlLight.includes('role="tab"') && htmlLight.includes('role="tabpanel"'), '工作表頁籤具有無障礙角色');
 assert(htmlLight.includes('position:sticky;top:26px') && htmlLight.includes('position:sticky;left:48px'), '凍結窗格以 sticky 位移呈現');
-assert(htmlLight.includes('2 個工作表') && htmlLight.includes('data-theme="light"'), '頂欄統計與淺色初始主題');
+assert(htmlLight.includes('3 個工作表') && htmlLight.includes('data-theme="light"'), '頂欄統計與淺色初始主題');
+{
+  console.log('== 凍結窗格與版面 ==');
+  const sec = htmlLight.split('<section class="xs-sheet"')[3] || '';
+  const heads = [...sec.matchAll(/<th class="(xs-colhead[^"]*)"[^>]*>([A-Z]+)<\/th>/g)].map((m) => [m[2], /xs-frozen/.test(m[1])]);
+  const rowsH = [...sec.matchAll(/<th class="(xs-rowhead[^"]*)"[^>]*>(\d+)<\/th>/g)].map((m) => [m[2], /xs-frozen/.test(m[1])]);
+  assert(JSON.stringify(heads) === JSON.stringify([['C', true], ['D', false], ['E', false], ['F', false]]), `欄字母依工作表座標、凍結欄依 c0 換算（D5 凍結、範圍從 C 起 → 只凍結 C；實際 ${JSON.stringify(heads)}）`);
+  assert(JSON.stringify(rowsH.map((r) => r[0])) === JSON.stringify(['3', '4', '5', '6', '7', '8']) && rowsH.filter((r) => r[1]).length === 2 && rowsH[1][1] && !rowsH[2][1],
+    `列號依工作表座標、凍結列依 r0 換算（3、4 列凍結；實際 ${JSON.stringify(rowsH)}）`);
+  const stickyTds = [...sec.matchAll(/<td\b[^>]*style="([^"]*position:sticky[^"]*)"/g)].length;
+  const allTds = [...sec.matchAll(/<td\b/g)].length;
+  assert(stickyTds === 2 * 4 + 4 * 1 && allTds === 24, `邊界表凍結格數 = 2 列×4 欄 + 其餘 4 列的 C 欄（實際 ${stickyTds}/${allTds}）`);
+  assert(/<td style="position:sticky;top:\d+px;left:48px;z-index:3"><\/td>/.test(sec), '凍結區內無樣式的空白格（C4）仍輸出 sticky，底色由表格層預設提供');
+  const zOf = (sel) => +((new RegExp(sel.replace(/[.]/g, '\\.') + '\\{[^}]*z-index:(\\d+)').exec(htmlLight) || [])[1] || 0);
+  const zBase = zOf('.xs-corner,.xs-colhead,.xs-rowhead'), zFrozen = zOf('.xs-colhead.xs-frozen,.xs-rowhead.xs-frozen'), zCorner = zOf('.xs-corner');
+  assert(zBase > 0 && zFrozen > zBase && zCorner > zFrozen, `凍結標頭 z-index 高於一般標頭、低於左上角（${zBase} < ${zFrozen} < ${zCorner}）`);
+  assert(/\.xs-sheets\{[^}]*height:100%/.test(htmlLight) && /\.xs-scroll\{[^}]*overflow:auto[^}]*flex:1 1 auto[^}]*min-height:0/.test(htmlLight),
+    '.xs-sheets 撐滿 .md-main、.xs-scroll 是工作表的捲動容器（截斷提示不會跟著捲走）');
+}
+{
+  console.log('== <script> 內 JSON 跳脫 ==');
+  const evil = AdoXlsx.buildDocument({ arrayBuffer: ab, fileName: 'x.xlsx', theme: '</script><script>alert(1)</script><!--', nonce: '' });
+  assert(!evil.includes('</script><script>alert(1)') && !evil.includes('<!--'), "cfg JSON 內的 '<' 已跳脫為 \\u003c（不會關閉 script 標籤）");
+  assert(evil.includes('\\u003c/script>\\u003cscript>alert(1)'), 'cfg 以 \\u003c 保留原值（JS 讀到的字串不變）');
+}
 assert(htmlLight.includes('.md-bar') && htmlLight.includes('--fg-muted:'), '外殼主題 CSS（AdoMarkdownTheme）已內嵌（測試須載入 md-theme.js）');
 {
   // 外殼 CSS 引用的變數都要在主題定義：名稱不存在時靜默退回 fallback 淺色值，深色模式變白底（v0.3.3 前的頁籤列）
