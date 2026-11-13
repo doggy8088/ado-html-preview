@@ -350,6 +350,7 @@
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const escapeAttr = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   // 注入到預覽 HTML 尾端的連結修正腳本。
   // 問題：在 sandbox iframe 裡點 <a href="#x"> 會被解析成「父頁面網址#x」，整個 iframe 會被導去載入 Azure DevOps 頁面，
@@ -373,7 +374,7 @@
       nav,
       hash: hash || '',
     }).replace(/</g, '\\u003c');
-    return `<script nonce="${nonce}">(function(){
+    return `<script nonce="${escapeAttr(nonce)}">(function(){
 var cfg=${cfg};
 var DOC_RE=/\\.(html?|md|markdown)$/i;
 // 回傳 {path,hash}（repo 內的相對路徑）或 {url}（絕對網址）或 null（#錨點、javascript: 等交回原本的處理）
@@ -449,7 +450,7 @@ if(cfg.nav>0){
   //   - 父頁面的回應端：內嵌模式是 content script，全螢幕模式是 preview.js（再經 background 轉給來源分頁）
   // 瀏覽器會先拿相對網址對照父頁面網址發出一個無效請求（回傳 ADO 頁面而非圖片），無法避免，只是浪費一次請求。
   function lazyImageScript(nonce, nav) {
-    return `<script nonce="${nonce}">(function(){
+    return `<script nonce="${escapeAttr(nonce)}">(function(){
 var cache=new Map();   // ref → data URL；null 代表失敗
 var waiting=new Map(); // ref → 等待回應的 <img> 陣列
 var tracked=new WeakMap(); // img → 登記時的 src 屬性值
@@ -587,10 +588,11 @@ scan(document.documentElement);
     if (!nonce) return html;
     const at = [];
     scanHtmlTags(html, (t) => { if (!t.end && t.name === 'script') at.push(t.nameEnd); });
+    const attr = ` nonce="${escapeAttr(nonce)}"`;
     let out = '';
     let last = 0;
     for (const p of at) {
-      out += html.slice(last, p) + ` nonce="${nonce}"`;
+      out += html.slice(last, p) + attr;
       last = p;
     }
     return out + html.slice(last);
@@ -1171,7 +1173,7 @@ scan(document.documentElement);
   // 附件預覽文件裡的連結：附件沒有目錄，相對路徑無從解析（點了不動作）；
   // #錨點改用 location.hash、絕對網址開新分頁；iframe 有焦點時 Esc 送不到 ADO，轉給父頁面關閉對話框
   function attachmentLinkScript(nonce) {
-    return `<script nonce="${nonce}">(function(){
+    return `<script nonce="${escapeAttr(nonce)}">(function(){
 document.addEventListener('click',function(e){
   if(e.defaultPrevented)return;
   var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a)return;
