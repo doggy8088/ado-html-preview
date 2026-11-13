@@ -34,7 +34,7 @@ test: ## 執行測試套件（xlsx-core 解析/渲染＋docx-core / pptx-core �
 	$(NODE) scripts/test-md-core.mjs
 
 lint: ## 語法與靜態檢查（node --check、bash -n、JSON、appDesc 長度）
-	@for f in content.js background.js preview.js md-core.js md-shell.js md-theme.js xlsx-core.js docx-core.js docx-runtime.js pptx-core.js pptx-runtime.js scripts/build-userscript.mjs scripts/build-docx-runtime.mjs scripts/build-pptx-runtime.mjs scripts/test-xlsx-core.mjs scripts/test-docx-core.mjs scripts/test-pptx-core.mjs; do \
+	@for f in content.js background.js preview.js md-core.js md-shell.js md-theme.js xlsx-core.js docx-core.js docx-runtime.js pptx-core.js pptx-runtime.js scripts/build-userscript.mjs scripts/build-docx-runtime.mjs scripts/build-pptx-runtime.mjs scripts/test-xlsx-core.mjs scripts/test-docx-core.mjs scripts/test-pptx-core.mjs scripts/test-md-core.mjs; do \
 		echo "node --check $$f"; \
 		$(NODE) --check "$$f" || exit 1; \
 	done

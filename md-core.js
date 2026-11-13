@@ -47,7 +47,7 @@
     let out = '';
     for (const t of tokens || []) {
       if (!t) continue;
-      if (t.type === 'image') { if (withAlt) out += t.text || ''; continue; }
+      if (t.type === 'image') { if (withAlt) out += decodeEntities(t.text || ''); continue; }
       if (t.type === 'html') continue;
       if (t.type === 'br') { out += ' '; continue; }
       if (Array.isArray(t.tokens) && t.tokens.length) { out += inlinePlainText(t.tokens, withAlt); continue; }

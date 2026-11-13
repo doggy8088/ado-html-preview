@@ -173,6 +173,7 @@ console.log('== 目錄文字與錨點 ==');
     '## 2.1 Title',
     '## \\*literal\\*',
     '## ![logo](x.png) Intro',
+    '## ![A &amp; B](u.png)',
   ].join('\n\n'));
   const t = r.toc;
   assert(r.title === '主標 — 副標', 'title 為純文字', r.title);
@@ -184,6 +185,7 @@ console.log('== 目錄文字與錨點 ==');
   assert(t[6].id === '21-title', '一般標題的錨點與舊版相同（2.1 Title → 21-title）', t[6]);
   assert(t[7].text === '*literal*', '\\* 轉義字元保留原字', t[7]);
   assert(t[8].text === 'Intro' && t[8].id === 'intro', '圖片＋文字的標題：目錄與錨點只取文字（與舊版錨點一致）', t[8]);
+  assert(t[9].text === 'A &amp; B' && t[9].id === 'a-b', '只有圖片的標題含 HTML 實體：alt 解碼後再轉義（A &amp; B → a-b）', t[9]);
   const toc = AdoMarkdown.tocHtml(t, 'x');
   assert(toc.includes('>1 &lt; 2</a>') && !/<b title/.test(toc), 'tocHtml 輸出不含未轉義的標籤', toc);
 }
@@ -263,6 +265,7 @@ R.linkNum=nl&&nl.textContent;R.linkNumOutsideLink=!!(nl&&nl.parentNode===hl);R.l
 R.readingMeta=!!$('.md-doc-meta');R.tableTools=document.querySelectorAll('.md-table-tools').length;
 R.tocTexts=[].map.call(document.querySelectorAll('.md-toc a'),function(a){return a.textContent;});
 R.rawTableWrapped=!!$('.md-table-wrap > table[border="1"]');
+R.looseCbs=[].map.call(document.querySelectorAll('.md-content li.md-task > p:first-child > input[type="checkbox"]'),function(cb){var cs=getComputedStyle(cb);var aft=getComputedStyle(cb,'::after');return {checked:cb.checked,appearance:cs.appearance,width:cs.width,height:cs.height,afterContent:aft.content};});
 // 捲動高亮：初始在頂端時不應高亮提示框內的標題（offsetTop 會量成相對 .md-alert 的小數字）
 var main=$('.md-main');
 var alertH=$('.md-alert h3');
@@ -315,6 +318,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
       assert(R.linkNum === '3.4' && R.linkNumOutsideLink && R.linkText === '連結標題', '## [3.4 連結標題](url)：編號徽章在連結外', R);
       assert(R.readingMeta && R.tableTools >= 1, '標題增強之後的步驟（閱讀時間、表格工具列）照常執行');
       assert(R.rawTableWrapped, '原始 HTML <table border="1"> 有包裝');
+      assert(R.looseCbs && R.looseCbs.length === 2 && R.looseCbs.every((c) => c.appearance === 'none' && c.width === '17px' && c.height === '17px') && R.looseCbs[1].checked && R.looseCbs[1].afterContent !== 'none', '鬆散工作清單 checkbox 套用 Fluent 樣式（appearance: none、17px、勾選符號）', R.looseCbs);
       assert(R.tocTexts.includes('logo 圖片') && R.tocTexts.includes('屬性含大於號') && R.tocTexts.includes('符號 & 實體 © 與 *轉義*'), '側欄目錄文字（圖片 alt、屬性含 >、實體）', R.tocTexts);
       assert(R.activeAtTop && R.activeAtTop !== '提示框內的標題', '捲動在頂端時不會誤高亮提示框內的標題', R.activeAtTop);
       assert(R.activeAtAlert === '提示框內的標題', '捲到提示框時高亮提示框內的標題', R.activeAtAlert);

@@ -577,7 +577,7 @@ html[data-toc="none"] .md-toc { display: none; }
   padding-left: 0;
   margin-left: -22px;
 }
-.md-content li.md-task > input[type="checkbox"] {
+.md-content :is(li.md-task, li.md-task > p:first-child) > input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   display: inline-block;
@@ -590,11 +590,11 @@ html[data-toc="none"] .md-toc { display: none; }
   background: var(--bg-surface);
   position: relative;
 }
-.md-content li.md-task > input[type="checkbox"]:checked {
+.md-content :is(li.md-task, li.md-task > p:first-child) > input[type="checkbox"]:checked {
   border-color: var(--accent);
   background: var(--accent);
 }
-.md-content li.md-task > input[type="checkbox"]:checked::after {
+.md-content :is(li.md-task, li.md-task > p:first-child) > input[type="checkbox"]:checked::after {
   content: "";
   position: absolute;
   left: 5px;
@@ -605,7 +605,8 @@ html[data-toc="none"] .md-toc { display: none; }
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
-.md-content li.md-task > input[type="checkbox"]:checked ~ * { color: var(--fg-muted); }
+.md-content :is(li.md-task, li.md-task > p:first-child) > input[type="checkbox"]:checked ~ *,
+.md-content li.md-task > p:first-child:has(> input[type="checkbox"]:checked) ~ * { color: var(--fg-muted); }
 
 /* 定義清單（部分渲染器支援） */
 .md-content dl { margin: 0 0 1.1em; }
