@@ -3,6 +3,63 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.4.2] – 2026-11-13 — 全面修正 HTML、Markdown、Excel / Office 與工作項目附件預覽的已知問題
+
+> 完整說明：[release-notes/v0.4.2.md](release-notes/v0.4.2.md)
+
+### 修正
+
+- **HTML 預覽、就地換頁與開啟行為**：以 HTML 標籤掃描取代全文 regex 補 `nonce` 與注入 `</body>` 腳本（避免誤改 JS 字串常值造成 `SyntaxError`）並跳脫 `nonce` 屬性值；補齊內嵌與全螢幕換頁錯誤頁的「← 上一頁」按鈕；就地換頁新增世代編號防止慢速舊請求倒蓋新頁；自動預覽在載入期間切檔時立即為新檔觸發；修正含空白／中文專案名的連結編碼、無前導 `/` 的 `path=` 目錄解析，以及全螢幕開窗失敗時的 `chrome.storage.session` 清理。
+- **工作項目附件預覽**：同名 `.html` / `.md` 附件結合對話框原始碼指紋區分快取並監聽文字變更，左右切換同名附件不再沿用第一份的預覽。
+- **Markdown 預覽**：標題含粗體／連結等行內標記時不再拋例外中斷後續增強（各步驟與各表格獨立容錯）；目錄文字改由語法樹提取並解碼 HTML 實體（含純圖片標題 alt）；修正行內三反引號誤觸程式碼圍籬、帶屬性原始 `<table>` 捲動包裝、鬆散工作清單 Fluent 勾選框樣式、提示框內標題捲動高亮、表格拖曳欄位放開狀態與數值排序判斷、DOM clobbering 防護，以及淺色主題文字 WCAG AA 4.5:1 對比度。
+- **Excel / Word / PowerPoint 預覽**：Excel 改依 `workbook.xml` + `rels` 對應工作表（相容多種非標準 `Target` 路徑）、修正 `indexed` 色盤前導零與填色還原、保留有樣式的空白儲存格底色（防凍結格透明穿字）、鎖定列號欄寬並動態校正凍結列／欄 `sticky` 位移、固定截斷提示列；PowerPoint 補齊雙調整值預設圖形 `adj1`/`adj2` 夾值與壞圖佔位框 `xlink:href` 清理；深色模式下 Word / PowerPoint 錯誤文字改用高對比色並標示舞台 `color-scheme: light`，內嵌設定 JSON 統一跳脫 `<`。
+
+### 行為變更
+
+- Markdown 移除無標題長文自動縮窄至 760px 等分類樣式，一般文件維持一致閱讀欄寬（6 欄以上寬表放寬至 1320px 不變）。
+- `docs/PRIVACY_POLICY.md` 補齊 Excel / Word / PowerPoint 全螢幕模式的 `chrome.storage.session` 短暫傳遞說明與內建開源函式庫清單。
+
+## [0.4.1] – 2026-11-12 — 新圖示
+
+> 完整說明：[release-notes/v0.4.1.md](release-notes/v0.4.1.md)
+
+### 新功能
+
+- **全新圖示**：靛紫漸層底板搭配白色眼睛與青色 `</>` 瞳孔，提升瀏覽器工具列 16 px 小尺寸辨識度；商店小型與大型宣傳圖同步換新。
+
+### 行為變更
+
+- 僅圖示與宣傳圖更新；按鈕、預覽行為與支援的檔案格式完全不變。
+
+## [0.4.0] – 2026-11-12 — 工作項目附件直接預覽
+
+> 完整說明：[release-notes/v0.4.0.md](release-notes/v0.4.0.md)
+
+### 新功能
+
+- **工作項目的 HTML / Markdown 附件直接顯示渲染結果**：在 Azure Boards 附件預覽對話框點開 `.html` / `.htm` 或 `.md` / `.markdown` 附件時，自動以隔離 sandbox 顯示完整網頁或自家 Markdown 主題排版，預覽區撐滿對話框左右箭頭之間的空間。
+- **標題列「原始碼 / 預覽」切換鈕**：隨時切回原本的原始碼檢視；支援左右箭頭切換附件與 Esc 關閉對話框。
+
+### 行為變更
+
+- 在工作項目頁透過 Work Item Tracking REST API 讀取目前對話框開啟的那一份附件（隱私權政策同步更新；不收集、不傳送任何資料）。
+
+### 已知限制
+
+- 附件無目錄結構，相對路徑資源與連結無法解析；僅支援已儲存的 HTML / Markdown 附件，無全螢幕模式。
+
+## [0.3.4] – 2026-11-06 — 商店文案調整（修正審核退件）
+
+> 完整說明：[release-notes/v0.3.4.md](release-notes/v0.3.4.md)
+
+### 修正
+
+- **修正商店審核退件「關鍵字垃圾內容」（Yellow Argon）**：摘要簡化為單一用途說明，詳細說明改以副檔名（`.md` / `.pdf` / `.xlsx` / `.docx` / `.pptx`）描述各格式功能，移除格式關鍵字列舉與第三方產品名稱。
+
+### 行為變更
+
+- 僅擴充功能與商店說明文字調整，功能與 v0.3.3 完全相同。
+
 ## [0.3.3] – 2026-11-05 — 修正 Excel 大表看不到工作表頁籤
 
 > 完整說明：[release-notes/v0.3.3.md](release-notes/v0.3.3.md)
@@ -404,6 +461,12 @@ Azure DevOps 內建的 Preview 會把 HTML 放進受 CSP 限制的 iframe，`<sc
 `release-notes/v<version>.md`。推到 `main` 且版本號是新的（無對應 `v<version>` tag）就會自動建立 GitHub Release，
 詳見 [docs/PUBLISHING.md](docs/PUBLISHING.md)。
 
+[0.4.2]: release-notes/v0.4.2.md
+[0.4.1]: release-notes/v0.4.1.md
+[0.4.0]: release-notes/v0.4.0.md
+[0.3.4]: release-notes/v0.3.4.md
+[0.3.3]: release-notes/v0.3.3.md
+[0.3.2]: release-notes/v0.3.2.md
 [0.3.1]: release-notes/v0.3.1.md
 [0.3.0]: release-notes/v0.3.0.md
 [0.2.12]: release-notes/v0.2.12.md
