@@ -19,16 +19,54 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-  const stripTags = (html) => html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+  // 把來源文字裡的 HTML 實體（&amp; / &#169; / &copy;…）解成字元。
+  // 瀏覽器內用 <textarea> 的 RCDATA 解析（只解實體、不建立任何元素、不執行任何東西）支援全部具名實體；
+  // node（測試）沒有 DOM 時退回常見實體＋數字實體。
+  let entityBox = null;
+  const decodeEntities = (s) => {
+    s = String(s);
+    if (s.indexOf('&') === -1) return s;
+    if (typeof document !== 'undefined' && document.createElement) {
+      try {
+        if (!entityBox) entityBox = document.createElement('textarea');
+        entityBox.innerHTML = s.replace(/</g, '&lt;');
+        return entityBox.value;
+      } catch { /* 退回下面的簡易版 */ }
+    }
+    return s
+      .replace(/&#(\d+);/g, (m, n) => { const c = Number(n); return c > 0 && c <= 0x10ffff ? String.fromCodePoint(c) : m; })
+      .replace(/&#x([0-9a-f]+);/gi, (m, n) => { const c = parseInt(n, 16); return c > 0 && c <= 0x10ffff ? String.fromCodePoint(c) : m; })
+      .replace(/&nbsp;/g, '\u00a0').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  };
 
-  const decodeEntities = (s) => s
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  // 標題的純文字：直接走 marked 的 inline tokens，而不是對渲染後的 HTML 做 regex 去標籤
+  // （屬性值裡的 > 會讓 /<[^>]*>/ 切錯位置）。inline HTML 標籤略過、標籤之間的文字保留；
+  // withAlt 為 true 時圖片以 alt 文字代表（只有圖片的標題才不會變成空白目錄項）。
+  function inlinePlainText(tokens, withAlt) {
+    let out = '';
+    for (const t of tokens || []) {
+      if (!t) continue;
+      if (t.type === 'image') { if (withAlt) out += t.text || ''; continue; }
+      if (t.type === 'html') continue;
+      if (t.type === 'br') { out += ' '; continue; }
+      if (Array.isArray(t.tokens) && t.tokens.length) { out += inlinePlainText(t.tokens, withAlt); continue; }
+      if (t.type === 'codespan' || t.type === 'escape') { out += t.text || ''; continue; } // 原始字元，不含實體
+      out += decodeEntities(t.text != null ? t.text : (t.raw || ''));
+    }
+    return out;
+  }
+  const headingText = (tokens) => {
+    const tidy = (s) => s.replace(/\s+/g, ' ').trim();
+    return tidy(inlinePlainText(tokens, false)) || tidy(inlinePlainText(tokens, true));
+  };
 
   // 標題錨點：保留中文 / 字母 / 數字，空白轉 -，其餘符號移除；重複時加 -1、-2
+  // 輸入是純文字（headingText 的結果）
   function makeSlugger() {
     const used = new Set();
     return (text) => {
-      let base = decodeEntities(stripTags(text)).trim().toLowerCase()
+      let base = String(text).trim().toLowerCase()
         .replace(/\s+/g, '-')
         .replace(/[^\p{L}\p{N}\-_]/gu, '')
         .replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -58,19 +96,27 @@
 
   // 把 Markdown 依 ``` / ~~~ 圍籬切段，只對圍籬「外」的文字套用 fn，
   // 避免示範 Azure DevOps 語法的程式碼區塊（例如 README 裡的 [[_TOC_]]、::: mermaid）被改寫
+  // 開頭圍籬依 CommonMark：最多 3 個前導空白；反引號圍籬的 info string 不可含反引號
+  // （```inline``` 這種同一行內的程式碼片段不是圍籬，否則後面的 [[_TOC_]] / ::: mermaid 會全部失效）。
+  // 結尾圍籬：同一種字元、長度不短於開頭、後面只能有空白。
+  const FENCE_OPEN = /^ {0,3}(?:(`{3,})[^`]*|(~{3,}).*)$/;
+  const FENCE_CLOSE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/;
   function outsideFences(md, fn) {
     const out = [];
     let buf = [];
     let fence = null;
     const flush = () => { if (buf.length) { out.push(fn(buf.join('\n'))); buf = []; } };
     for (const line of md.split('\n')) {
-      const open = line.match(/^ {0,3}(`{3,}|~{3,})/);
       if (fence) {
         out.push(line);
-        if (open && open[1][0] === fence[0] && open[1].length >= fence.length && /^ {0,3}(`{3,}|~{3,})[ \t]*$/.test(line)) fence = null;
-      } else if (open) {
+        const close = line.match(FENCE_CLOSE);
+        if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+        continue;
+      }
+      const open = line.match(FENCE_OPEN);
+      if (open) {
         flush();
-        fence = open[1];
+        fence = open[1] || open[2];
         out.push(line);
       } else {
         buf.push(line);
@@ -131,9 +177,11 @@
     const renderer = {
       heading({ tokens, depth }) {
         const text = this.parser.parseInline(tokens);
-        const id = slug(text);
-        state.toc.push({ level: depth, id, text: stripTags(text) });
-        if (!state.title && depth === 1) state.title = decodeEntities(stripTags(text));
+        const plain = headingText(tokens);
+        const id = slug(plain);
+        // toc[].text 維持「可直接放進 HTML 的字串」（已轉義），tocHtml 與外部呼叫端都直接使用
+        state.toc.push({ level: depth, id, text: escapeHtml(plain) });
+        if (!state.title && depth === 1) state.title = plain;
         return `<h${depth} id="${id}"><a class="md-anchor" href="#${id}" aria-label="連結到此段落">#</a>${text}</h${depth}>\n`;
       },
       code({ text, lang }) {
@@ -175,29 +223,62 @@
 
   // ---------- 後處理 ----------
 
+  // 表格外包一層可水平捲動的容器，寬表格不會把版面撐破。
+  // 開頭標籤可帶屬性（Markdown 裡的原始 HTML：<table border="1">），大小寫不拘；
+  // 開關標籤成對處理：只有配到開頭的 </table> 才補 </div>，沒關閉的表格在文末補上，不會產生落單的 </div>。
+  const TABLE_TAG = /<(\/?)table\b((?:\s+[^\s"'>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*)\s*\/?>/gi;
+  function wrapTables(html) {
+    let open = 0;
+    html = html.replace(TABLE_TAG, (tag, close) => {
+      if (!close) { open++; return '<div class="md-table-wrap">' + tag; }
+      if (!open) return tag;
+      open--;
+      return tag + '</div>';
+    });
+    while (open-- > 0) html += '</table></div>';
+    return html;
+  }
+
   function postprocess(html, state) {
-    // 表格外包一層可水平捲動的容器，寬表格不會把版面撐破
-    html = html.replace(/<table>/g, '<div class="md-table-wrap"><table>').replace(/<\/table>/g, '</table></div>');
-    // 工作清單項目加上 class，方便隱藏原生 bullet
-    html = html.replace(/<li>(\s*<input[^>]*type="checkbox")/g, '<li class="md-task">$1');
+    html = wrapTables(html);
+    // 工作清單項目加上 class，方便隱藏原生 bullet（鬆散清單的 checkbox 包在 <p> 裡）
+    html = html.replace(/<li>(\s*(?:<p>\s*)?<input[^>]*type="checkbox")/g, '<li class="md-task">$1');
     // [[_TOC_]]（見 normalizeToc）
     html = html.split(TOC_PLACEHOLDER).join(tocHtml(state.toc, 'md-toc-inline'));
     return html;
   }
 
+  // DOM clobbering 防護（SANITIZE_DOM 關閉的補強）：
+  //   - document 的具名屬性（[LegacyOverrideBuiltIns]）會被 <img name="querySelector"> 這類元素蓋掉，
+  //     bootstrap 依賴 document.querySelector / getElementById / body / head…；embed / form / iframe / object
+  //     已整個禁止，剩下的入口是 img 的 name，所以 name 只留在 <a>（<a name="…"> 是常見的錨點寫法，不會蓋到 document）。
+  //   - window 的具名屬性（id="mermaid"）不會蓋掉既有的屬性，只會冒充「尚未載入」的全域；
+  //     bootstrap 改用 getMermaid() 檢查真的函式庫物件，不靠刪 id（標題「Mermaid」的錨點就是 id="mermaid"）。
+  function dropClobberingName(node, data) {
+    if (data.attrName === 'name' && node.nodeName !== 'A') data.keepAttr = false;
+  }
+
   function sanitize(html) {
     const DOMPurify = root.DOMPurify;
     if (!DOMPurify || !DOMPurify.isSupported) return html;
-    return DOMPurify.sanitize(html, {
-      ADD_TAGS: ['kbd', 'details', 'summary', 'mark', 'abbr', 'sup', 'sub', 'button'],
-      ADD_ATTR: ['id', 'class', 'align', 'loading', 'open', 'scope', 'data-label', 'data-done', 'aria-label', 'checked', 'disabled', 'type'],
-      // 標題 id 直接用標題文字（title / body / links…），SANITIZE_DOM 會把這類 id 當成 DOM clobbering 刪掉；
-      // 文件跑在沒有 allow-same-origin 的 sandbox 內、bootstrap 不依賴 window.* 名稱，關掉無妨
-      SANITIZE_DOM: false,
-      FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
-      FORBID_ATTR: ['style', 'onerror', 'onload'],
-      ALLOW_UNKNOWN_PROTOCOLS: false,
-    });
+    DOMPurify.addHook('uponSanitizeAttribute', dropClobberingName);
+    try {
+      return DOMPurify.sanitize(html, {
+        ADD_TAGS: ['kbd', 'details', 'summary', 'mark', 'abbr', 'sup', 'sub', 'button'],
+        ADD_ATTR: ['id', 'class', 'align', 'loading', 'open', 'scope', 'data-label', 'data-done', 'aria-label', 'checked', 'disabled', 'type'],
+        // 標題 id 直接用標題文字（title / body / links…），SANITIZE_DOM 會把這類 id 當成 DOM clobbering 刪掉；
+        // 文件跑在沒有 allow-same-origin 的 sandbox 內，bootstrap 只用捕獲的區域變數與 getMermaid() 的型別檢查，
+        // 不信任可被具名元素冒充的 window.*；document 的冒充入口由 dropClobberingName 擋掉
+        SANITIZE_DOM: false,
+        FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
+        FORBID_ATTR: ['style', 'onerror', 'onload'],
+        ALLOW_UNKNOWN_PROTOCOLS: false,
+      });
+    } finally {
+      // hook 掛在共用的 DOMPurify 實例上，用完就移除，不影響其他呼叫端
+      if (DOMPurify.removeHook.length >= 2) DOMPurify.removeHook('uponSanitizeAttribute', dropClobberingName);
+      else DOMPurify.removeHook('uponSanitizeAttribute');
+    }
   }
 
   /**

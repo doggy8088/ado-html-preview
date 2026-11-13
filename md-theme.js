@@ -63,7 +63,7 @@
   --fg: #201f1e;
   --fg-2: #323130;
   --fg-muted: #605e5c;
-  --fg-faint: #8a8886;
+  --fg-faint: #6c6a68;            /* ≥ 4.5:1 於 surface / app / sunken / code-head（原 #8a8886 僅 3.53:1） */
   --fg-disabled: #a19f9d;
 
   --line: #edebe9;
@@ -79,7 +79,7 @@
   --success: #107c10;
   --success-fg: #ffffff;
   --warning: #9d5d00;
-  --danger: #d13438;
+  --danger: #c4262e;              /* 於 --bg-sunken 5.13:1（原 #d13438 為 4.41:1） */
 
   --shadow-2: 0 1.6px 3.6px rgba(0,0,0,.132), 0 .3px .9px rgba(0,0,0,.108);
   --shadow-8: 0 3.2px 7.2px rgba(0,0,0,.132), 0 .6px 1.8px rgba(0,0,0,.108);
@@ -99,7 +99,7 @@
   --hl-string: #a3301f;
   --hl-comment: #227a22;
   --hl-number: #0c7b5a;
-  --hl-type: #237a90;
+  --hl-type: #1f7489;             /* 於 --bg-code 4.88:1（原 #237a90 為 4.49:1） */
   --hl-function: #7a5c16;
   --hl-attr: #b3261e;
   --hl-variable: #0a2a72;
@@ -1210,17 +1210,8 @@ html[data-theme="dark"] .md-mermaid .edgeLabel rect, html[data-theme="dark"] .md
 }
 
 /* ---------- 自適應版面（md-shell 的 enhanceDocument 依文件結構加上） ---------- */
-/* 文件分類：寬表文件放寬內容欄；逐字稿／無標題長文用窄閱讀欄；參考文件緊湊 */
+/* 文件分類：含 6 欄以上寬表的文件放寬內容欄 */
 .md-content.md-wide { --content-w: 1320px; }
-.md-content.md-prose {
-  max-width: min(var(--content-w), 760px);
-  font-size: 15.5px;
-  line-height: 2;
-  letter-spacing: .015em;
-}
-.md-content.md-prose > p { margin-bottom: 1.5em; }
-.md-content.md-reference { font-size: 15px; }
-.md-content.is-cjk { line-height: 1.95; letter-spacing: .02em; }
 
 /* 標題下的閱讀時間 */
 .md-doc-meta {

@@ -41,8 +41,11 @@ if(toc){
   var ticking=false;
   function update(){
     ticking=false;
+    // 位置一律以捲動容器為基準（getBoundingClientRect 差值 + scrollTop）：offsetTop 相對的是 offsetParent，
+    // 標題在 .md-alert（position:relative）等容器內時會量成相對該容器的小數字
+    var base=scroller===window?0:scroller.getBoundingClientRect().top;
     var top=(scroller===window?window.scrollY:scroller.scrollTop)+120;var cur=heads[0];
-    for(var i=0;i<heads.length;i++){var y=scroller===window?heads[i].getBoundingClientRect().top+window.scrollY:heads[i].offsetTop;if(y<=top)cur=heads[i];else break;}
+    for(var i=0;i<heads.length;i++){var y=heads[i].getBoundingClientRect().top-base+(scroller===window?window.scrollY:scroller.scrollTop);if(y<=top)cur=heads[i];else break;}
     links.forEach(function(a){a.classList.remove('is-active');});
     if(cur&&byId[cur.id]){var a=byId[cur.id];a.classList.add('is-active');var r=a.getBoundingClientRect(),tr=toc.getBoundingClientRect();if(r.top<tr.top||r.bottom>tr.bottom)a.scrollIntoView({block:'nearest'});}
   }
@@ -62,6 +65,9 @@ document.addEventListener('click',function(e){
 // 直接 <script src> 失敗時（sandbox iframe 的 origin 為 null，可能載不到擴充功能內的檔案），
 // 改向父頁面要原始碼（content script / preview.js 會回 ado-md-mermaid-source），以帶 nonce 的 inline script 注入。
 var mermaidState='idle';
+// 取得真正的 mermaid 函式庫：文件裡 id="mermaid" 的元素（例如標題「Mermaid」的錨點）在函式庫載入前會以
+// window 具名屬性冒充 window.mermaid，所以要檢查它確實有 render / initialize 函式
+function getMermaid(){var m=window.mermaid;return (m&&typeof m.render==='function'&&typeof m.initialize==='function')?m:null;}
 // mermaid 11 會呼叫 URL.canParse（Chrome 120 才有），擴充功能最低支援 Chrome 112，先補上同義的 polyfill
 if(typeof URL!=='undefined'&&typeof URL.canParse!=='function'){URL.canParse=function(u,b){try{new URL(u,b);return true;}catch(e){return false;}};}
 function mermaidFailed(){mermaidState='failed';renderMermaid();}
@@ -75,7 +81,7 @@ function requestFromParent(){
     clearTimeout(timer);window.removeEventListener('message',onMsg);
     if(!ev.data.source){mermaidFailed();return;}
     try{var t=document.createElement('script');if(cfg.nonce)t.setAttribute('nonce',cfg.nonce);t.textContent=ev.data.source;document.head.appendChild(t);}catch(e){}
-    if(window.mermaid){mermaidState='ready';renderMermaid();}else{mermaidFailed();}
+    if(getMermaid()){mermaidState='ready';renderMermaid();}else{mermaidFailed();}
   }
   window.addEventListener('message',onMsg);
   window.parent.postMessage({type:'ado-md-mermaid-request'},'*');
@@ -90,15 +96,18 @@ function renderMermaid(){
     document.head.appendChild(s);return;
   }
   if(mermaidState==='failed'){blocks.forEach(function(b){b.classList.add('is-failed');b.setAttribute('data-error','無法載入 mermaid');});return;}
-  if(mermaidState!=='ready'||!window.mermaid)return;
-  try{window.mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:theme==='dark'?'dark':'default',fontFamily:'inherit'});}catch(e){}
+  var mm=getMermaid();
+  if(mermaidState==='ready'&&!mm){mermaidState='failed';renderMermaid();return;}
+  if(mermaidState!=='ready')return;
+  try{mm.initialize({startOnLoad:false,securityLevel:'strict',theme:theme==='dark'?'dark':'default',fontFamily:'inherit'});}catch(e){}
   blocks.forEach(function(b,i){
     if(b.__src==null){var pre=b.querySelector('pre');b.__src=pre?pre.textContent:b.textContent;}
     var src=b.__src;var id='md-mermaid-'+i+'-'+Date.now();
     // 每個區塊的渲染世代：快速切換主題時較早的 render 可能較晚完成，過期的結果一律丟掉，不回寫舊主題的圖
     var gen=b.__gen=(b.__gen||0)+1;
     b.classList.remove('is-failed');
-    window.mermaid.render(id,src).then(function(res){
+    var p;try{p=mm.render(id,src);}catch(e){p=Promise.reject(e);}
+    Promise.resolve(p).then(function(res){
       if(gen!==b.__gen){var tmp=document.getElementById('d'+id);if(tmp)tmp.remove();return;}
       b.innerHTML=res.svg;if(res.bindFunctions)res.bindFunctions(b);setupMermaidTools(b);
     },function(err){
@@ -242,24 +251,30 @@ var ICON_EMOJI={'summary':'📌','info':'📄','todo':'☑️','risk':'⚠️','
 function iconFor(text){var lower=text.toLowerCase();for(var i=0;i<ICON_WORDS.length;i++){for(var j=0;j<ICON_WORDS[i][1].length;j++){if(lower.indexOf(ICON_WORDS[i][1][j])!==-1)return ICON_WORDS[i][0];}}return null;}
 function firstTextNode(el){var w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,null);var n;while((n=w.nextNode())){if(n.parentElement&&n.parentElement.closest&&n.parentElement.closest('.md-anchor'))continue;if(n.data.trim())return n;}return null;}
 function itemRoot(li){return (li.children.length===1&&li.firstElementChild.tagName==='P')?li.firstElementChild:li;}
-function decorateHeadings(art){
-  [].slice.call(art.querySelectorAll('h1,h2,h3,h4')).forEach(function(h){
+// 文字節點在標題內最外層的祖先（標題的直接子節點）：firstTextNode 找到的是第一段有字的文字，
+// 它前面只有 .md-anchor 或沒有文字的元素，所以把徽章插在這個祖先前面一定合法，也不會被包進 <strong> / <a> 裡
+function topChildOf(h,n){while(n&&n.parentNode&&n.parentNode!==h)n=n.parentNode;return n&&n.parentNode===h?n:null;}
+function decorateHeading(h){
     var tn=firstTextNode(h);if(!tn)return;
-    // 章節編號徽章：「2.1 標題」的「2.1」
+    // 章節編號徽章：「2.1 標題」的「2.1」（文字可能在 **粗體** / [連結] / `code` 等行內元素裡）
     var m=tn.data.match(/^\s*((?:\d+\.)+\d+)\s+/);
     if(m){
-      var num=document.createElement('span');num.className='md-h-num';num.textContent=m[1];
-      tn.data=tn.data.slice(m[0].length);
-      h.insertBefore(num,tn);
+      var ref=topChildOf(h,tn);
+      if(ref){
+        var num=document.createElement('span');num.className='md-h-num';num.textContent=m[1];
+        tn.data=tn.data.slice(m[0].length);
+        h.insertBefore(num,ref);
+      }
     }
-    // H1 主副標拆行：「主標 — 副標」
+    // H1 主副標拆行：「主標 — 副標」；拆分在文字節點實際的父節點內進行（保留外層的粗體 / 連結）
     if(h.tagName==='H1'){
       var t=firstTextNode(h);
-      if(t&&/^[^<>\n]*\s+[—–]\s+\S/.test(t.data)){
+      if(t&&t.parentNode&&/^[^<>\n]*\s+[—–]\s+\S/.test(t.data)){
         var parts=t.data.split(/\s+[—–]\s+/);
         var a=document.createElement('span');a.className='md-title';a.textContent=parts.shift();
         var b=document.createElement('span');b.className='md-subtitle';b.textContent=parts.join(' — ');
-        h.insertBefore(a,t);h.insertBefore(b,t);h.removeChild(t);
+        var parent=t.parentNode;
+        parent.insertBefore(a,t);parent.insertBefore(b,t);parent.removeChild(t);
       }
     }
     // H2 主題 Emoji 圖示（標題已有 emoji 則不加；以 span 呈現，不動到 h2 的既有裝飾）
@@ -270,10 +285,16 @@ function decorateHeadings(art){
         if(icon&&ICON_EMOJI[icon]){
           var span=document.createElement('span');
           span.className='md-h-icon';span.setAttribute('aria-hidden','true');span.textContent=ICON_EMOJI[icon];
-          h.insertBefore(span,h.querySelector('.md-anchor')?h.querySelector('.md-anchor').nextSibling:h.firstChild);
+          var anchor=h.querySelector(':scope > .md-anchor');
+          h.insertBefore(span,anchor?anchor.nextSibling:h.firstChild);
         }
       }
     }
+}
+function decorateHeadings(art){
+  // 單一標題出錯（例如作者的 HTML 結構很特殊）只略過該標題，不影響其他標題與後續的增強步驟
+  [].slice.call(art.querySelectorAll('h1,h2,h3,h4')).forEach(function(h){
+    try{decorateHeading(h);}catch(e){if(window.console&&console.warn)console.warn('[md-preview] heading enhancement skipped',e);}
   });
 }
 function addReadingTime(art){
@@ -344,7 +365,12 @@ function badgeStatusCells(wrap){
   });
 }
 function setupTables(art){
+  // 每個表格各自隔離：一個表格的結構特殊而出錯，不影響其他表格
   [].slice.call(art.querySelectorAll('.md-table-wrap')).forEach(function(wrap){
+    try{setupTable(art,wrap);}catch(e){if(window.console&&console.warn)console.warn('[md-preview] table enhancement skipped',e);}
+  });
+}
+function setupTable(art,wrap){
     var table=wrap.querySelector(':scope > table');if(!table||!table.tHead||!table.tBodies[0])return;
     var head=table.tHead.rows[0];var body=table.tBodies[0];
     var rows=[].slice.call(body.rows);if(!rows.length)return;
@@ -452,13 +478,18 @@ function setupTables(art){
           var next=dropIndex(ev.clientX);
           if(next!==to){clearDropMarks();to=next;head.cells[to].classList.add('is-drop-before');}
         }
-        function up(){
+        function up(ev){
           document.removeEventListener('pointermove',move);
           document.removeEventListener('pointerup',up);
           document.removeEventListener('pointercancel',up);
           if(!dragging)return;
-          draggedCol=true;
           wrap.classList.remove('is-reordering');th.classList.remove('is-dragging');clearDropMarks();
+          // 取消（pointercancel）就放棄搬移，也沒有後續的 click 要吞
+          if(ev&&ev.type==='pointercancel'){draggedCol=false;return;}
+          // 只吞「這次放開」緊接著的 click：click 與 pointerup 在同一個事件任務內派送，
+          // 下一個任務就歸零——在按鈕外放開時 click 不會落到排序鈕上，旗標不會卡住、吞掉之後真正的點擊
+          draggedCol=true;
+          setTimeout(function(){draggedCol=false;},0);
           placeColumn(th,to);
           announce('已將 '+headers[colIndexOf(th)]+' 欄移至第 '+(colIndexOf(th)+1)+' 欄');
         }
@@ -504,7 +535,7 @@ function setupTables(art){
       var order=rows.map(function(r,i){return i;});
       if(dir){
         var keys=rows.map(function(r){return r.cells[col]?(r.cells[col].textContent||'').trim():'';});
-        var numeric=keys.filter(Boolean).every(function(k){return /^[~約≈]?-?[\d,.]+%?$/.test(k.replace(/,/g,''));});
+        var numeric=keys.filter(Boolean).every(function(k){return /^[~約≈]?-?(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(k.replace(/,/g,''));});
         order.sort(function(a,b){
           var x=keys[a],y=keys[b];
           if(!x||!y)return x?-1:(y?1:a-b);
@@ -539,15 +570,14 @@ function setupTables(art){
     }
     update();
     if(window.ResizeObserver)new ResizeObserver(update).observe(wrap);
-  });
 }
 function enhanceDocument(){
   var art=document.querySelector('.md-content');if(!art||art.getAttribute('data-enhanced'))return;
   art.setAttribute('data-enhanced','1');
-  decorateHeadings(art);
-  addReadingTime(art);
-  classifyLists(art);
-  setupTables(art);
+  // 每個步驟各自隔離：任何一步拋例外都不會中斷其他步驟（也不會中斷 bootstrap 後面的 applyTheme）
+  [decorateHeadings,addReadingTime,classifyLists,setupTables].forEach(function(step){
+    try{step(art);}catch(e){if(window.console&&console.warn)console.warn('[md-preview] enhancement step failed',e);}
+  });
 }
 enhanceDocument();
 
