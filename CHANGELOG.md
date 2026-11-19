@@ -3,6 +3,14 @@
 「Azure DevOps HTML Preview」所有版本的變更紀錄，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.1.0/)。
 每個版本的完整說明（含運作方式與已知限制）見 [`release-notes/`](release-notes/) 內的對應檔案，發布包見 [GitHub Releases](https://github.com/doggy8088/ado-html-preview/releases)。
 
+## [0.4.3] – 2026-11-20 — 修正 Markdown 屬性卡的行內程式碼
+
+> 完整說明：[release-notes/v0.4.3.md](release-notes/v0.4.3.md)
+
+### 修正
+
+- **Markdown 預覽**：屬性卡內的程式碼與周圍文字一起換行，避免程式碼底框因相鄰卡片換行而被拉高。
+
 ## [0.4.2] – 2026-11-13 — 全面修正 HTML、Markdown、Excel / Office 與工作項目附件預覽的已知問題
 
 > 完整說明：[release-notes/v0.4.2.md](release-notes/v0.4.2.md)

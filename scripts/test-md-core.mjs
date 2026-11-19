@@ -72,6 +72,11 @@ const SHOWCASE_MD = [
   '',
   '- [x] 鬆散項目二',
   '',
+  '## 參考',
+  '',
+  '- **變更日誌**：`CHANGELOG.md` 的 `[Unreleased]` 段落',
+  '- **實作分支**：`feat/agent-skills`（7 commits，28 個檔案，+3248 / -368）',
+  '',
   '## 表格',
   '',
   '| 版本 | 數量 | 說明 |',
@@ -265,6 +270,7 @@ R.linkNum=nl&&nl.textContent;R.linkNumOutsideLink=!!(nl&&nl.parentNode===hl);R.l
 R.readingMeta=!!$('.md-doc-meta');R.tableTools=document.querySelectorAll('.md-table-tools').length;
 R.tocTexts=[].map.call(document.querySelectorAll('.md-toc a'),function(a){return a.textContent;});
 R.rawTableWrapped=!!$('.md-table-wrap > table[border="1"]');
+R.propertyCodeDisplay=Array.from(document.querySelectorAll('.md-kv code'),function(code){return getComputedStyle(code).display;});
 R.looseCbs=[].map.call(document.querySelectorAll('.md-content li.md-task > p:first-child > input[type="checkbox"]'),function(cb){var cs=getComputedStyle(cb);var aft=getComputedStyle(cb,'::after');return {checked:cb.checked,appearance:cs.appearance,width:cs.width,height:cs.height,afterContent:aft.content};});
 // 捲動高亮：初始在頂端時不應高亮提示框內的標題（offsetTop 會量成相對 .md-alert 的小數字）
 var main=$('.md-main');
@@ -318,6 +324,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){
       assert(R.linkNum === '3.4' && R.linkNumOutsideLink && R.linkText === '連結標題', '## [3.4 連結標題](url)：編號徽章在連結外', R);
       assert(R.readingMeta && R.tableTools >= 1, '標題增強之後的步驟（閱讀時間、表格工具列）照常執行');
       assert(R.rawTableWrapped, '原始 HTML <table border="1"> 有包裝');
+      assert(R.propertyCodeDisplay.length === 3 && R.propertyCodeDisplay.every((display) => display === 'inline'), '屬性卡中的程式碼維持行內排版', R.propertyCodeDisplay);
       assert(R.looseCbs && R.looseCbs.length === 2 && R.looseCbs.every((c) => c.appearance === 'none' && c.width === '17px' && c.height === '17px') && R.looseCbs[1].checked && R.looseCbs[1].afterContent !== 'none', '鬆散工作清單 checkbox 套用 Fluent 樣式（appearance: none、17px、勾選符號）', R.looseCbs);
       assert(R.tocTexts.includes('logo 圖片') && R.tocTexts.includes('屬性含大於號') && R.tocTexts.includes('符號 & 實體 © 與 *轉義*'), '側欄目錄文字（圖片 alt、屬性含 >、實體）', R.tocTexts);
       assert(R.activeAtTop && R.activeAtTop !== '提示框內的標題', '捲動在頂端時不會誤高亮提示框內的標題', R.activeAtTop);

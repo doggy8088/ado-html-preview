@@ -1284,9 +1284,7 @@ ul.md-kv {
   list-style: none;
 }
 ul.md-kv > li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
+  /* 卡片由外層 grid 排列，卡內的程式碼與文字一起依行內規則換行。 */
   margin: 0;
   padding: 12px 16px;
   border: 1px solid var(--line);
@@ -1295,9 +1293,8 @@ ul.md-kv > li {
   box-shadow: var(--shadow-2);
   font-size: 14.5px;
 }
-ul.md-kv > li > .md-kv-key,
-ul.md-kv > li > strong.md-kv-key {
-  flex: 0 0 auto;
+ul.md-kv > li .md-kv-key {
+  margin-inline-end: 12px;
   color: var(--fg-muted);
   font-weight: 600;
   white-space: nowrap;
