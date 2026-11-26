@@ -134,6 +134,9 @@ PowerPoint 檔（.pptx）是「PowerPoint 預覽 (內嵌)」與「PowerPoint 預
   瀏覽器上一頁 / 前進才會逐頁可用（實測反覆重設 srcdoc 不會留下可用的歷史，上一頁只會重讀目前內容）。
   blob 文件繼承 dev.azure.com 的 CSP（實測其 `frame-src` / `child-src` 允許 `blob:`，但擋 `chrome-extension:`），
   所以每個 `<script>` 都要補上頁面的 nonce；blob URL 建立後不可 revoke（上一頁靠重新載入它）。
+  sandbox（origin 為 null）裡的 blob: 文件，Chrome 會靜默擋下 fragment 導覽：原生點擊 `#x` 與 `location.hash=…`
+  都不換網址、不捲動、不觸發 hashchange（v0.4.4 實測）。所以 `linkFixScript` / `attachmentLinkScript` 遇到這類文件時，
+  會在 window 冒泡階段自行處理 `#錨點`（`jumpTo`：`scrollIntoView`＋`replaceState`＋補發 hashchange），不要改回 `location.hash`。
 - 就地換頁協定（`linkFixScript` 產生的預覽內腳本 ↔ 父頁面）：點 repo 文件連結送 `ado-nav-request {path, hash, from}`，
   父頁面組好新文件（`finalizeDoc`）後導覽 iframe（內嵌 / userscript 用 blob: URL；全螢幕用 `sandbox.html?nav=N`，
   由 background 的 `build-preview-doc` 轉給來源分頁組檔）；`ado-nav-back` 則呼叫父視窗的 `history.back()`。
